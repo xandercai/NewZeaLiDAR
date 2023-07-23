@@ -11,7 +11,7 @@ import logging
 import logging.config
 import warnings
 
-import src.utils
+from src import utils
 
 
 class FilterRecords(logging.Filter):
