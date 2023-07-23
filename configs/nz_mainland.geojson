@@ -1,0 +1,44 @@
+{
+  "type": "FeatureCollection",
+  "name": "selected_polygon",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:EPSG::2193"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              983515.7211,
+              4728776.8709
+            ],
+            [
+              983515.7211,
+              6223676.2306
+            ],
+            [
+              2117458.3527,
+              6223676.2306
+            ],
+            [
+              2117458.3527,
+              4728776.8709
+            ],
+            [
+              983515.7211,
+              4728776.8709
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
+

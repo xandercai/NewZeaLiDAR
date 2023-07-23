@@ -1,0 +1,31 @@
+# YML file for setting up Python environment
+name: lidar
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python
+  - pip
+  - python-dotenv
+  - pytest
+  - lxml
+  - pandas
+  - geopandas
+  - rasterio
+  - geojson
+  - python-pdal
+  - pdal
+  - gdal
+  - pygeos
+  - shapely
+  - psycopg2
+  - sqlalchemy<2.0  # v2.0 does not supported by some packages yet.
+  - geoalchemy2
+  - scrapy
+  - dask
+  - bokeh!=3.0.*,>=2.4.2  # for Dask dashboard
+  - pip:
+    - geofabrics
+    - geovoronoi
+    - geoapis
+prefix:
