@@ -285,16 +285,21 @@ def run(catch_id: Union[int, str, list] = None,
                   else None)
 
     runtime = []
+    failed = []
     for i in catch_id:
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # check if catchment boundary of RoI within lidar extent
         if resolution and lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
             # generate catchment boundary file for each catchment
             utils.gen_boundary_file(catch_path, catchment_boundary, i)
-
             # generate hydrological conditioned dem for each catchment
             start = datetime.now()
-            single_instructions = single_process(engine, instructions, i, mode=mode, buffer=buffer)
+            try:
+                single_instructions = single_process(engine, instructions, i, mode=mode, buffer=buffer)
+            except Exception as e:
+                logger.error(f'Error: {e}')
+                failed.append(i)
+                continue
             end = datetime.now()
             runtime.append(end - start)
             store_hydro_to_db(engine, DEM, single_instructions)
@@ -312,6 +317,8 @@ def run(catch_id: Union[int, str, list] = None,
         gdf_extent = gpd.GeoDataFrame(index=[0], crs='epsg:2193', geometry=[geom_extent])
         gdf_extent.to_file(str(gpkg_dir / pathlib.Path(f'dem_extent_{time.strftime("%Y%m%d_%H%M%S")}.gpkg')),
                            driver='GPKG')
+    if len(failed):
+        logger.info(f'Failed {len(failed)} catchments: \n{failed}')
     logger.info(f"Total runtime: {sum(runtime, timedelta(0, 0))}\n"
                 f"Runtime for each catch_id:{json.dumps(runtime, indent=2, default=str)}")
     engine.dispose()
