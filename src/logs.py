@@ -53,7 +53,7 @@ def setup_logging(
 
     if default_level is not None:
         for name in logging.Logger.manager.loggerDict.keys():
-            logging.getLogger(name).setLevel(default_level)
+            logging.getLogger(name).setLevel(logging.ERROR)
 
     value = utils.get_env_variable(env_key)
     path = default_path
