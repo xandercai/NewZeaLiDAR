@@ -148,6 +148,7 @@ def single_process(engine: object,
     else:
         raise ValueError(f'Invalid mode: {mode}')
     gen_dem(single_instructions)
+    gc.collect()
     return single_instructions
 
 
@@ -297,7 +298,9 @@ def run(catch_id: Union[int, str, list] = None,
             try:
                 single_instructions = single_process(engine, instructions, i, mode=mode, buffer=buffer)
             except Exception as e:
-                logger.error(f'Error: {e}')
+                logger.error(f'Catchment {i} failed. Error message:\n{e}')
+                logger.error(f'Catchment {i} failed. Running instructions:'
+                             f'\n{json.dumps(instructions, indent=2, default=str)}')
                 failed.append(i)
                 continue
             end = datetime.now()
