@@ -279,16 +279,12 @@ def run(catch_id: Union[int, str, list] = None,
         if gpkg:
             lidar_extent.to_file(str(gpkg_dir / pathlib.Path('lidar_extent.gpkg')), driver='GPKG')
 
-    resolution = (instructions["instructions"]["output"]["grid_params"]["resolution"]
-                  if 'resolution' in instructions["instructions"]["output"]["grid_params"]
-                  else None)
-
     runtime = []
     failed = []
     for i in catch_id:
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # check if catchment boundary of RoI within lidar extent
-        if resolution and lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
+        if lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
             # generate catchment boundary file for each catchment
             utils.gen_boundary_file(catch_path, catchment_boundary, i)
             # generate hydrological conditioned dem for each catchment
@@ -296,7 +292,7 @@ def run(catch_id: Union[int, str, list] = None,
             try:
                 single_instructions = single_process(engine, instructions, i, mode=mode, buffer=buffer)
             except Exception as e:
-                logger.error(f'Catchment {i} failed. Error message:\n{e}')
+                logger.exception(f'Catchment {i} failed. Error message:\n{e}')
                 logger.error(f'Catchment {i} failed. Running instructions:'
                              f'\n{json.dumps(instructions, indent=2, default=str)}')
                 failed.append(i)
@@ -304,8 +300,6 @@ def run(catch_id: Union[int, str, list] = None,
             end = datetime.now()
             runtime.append(end - start)
             store_hydro_to_db(engine, DEM, single_instructions)
-        elif resolution is None:
-            logger.warning('Warning: resolution is None, please check the instructions file.')
         else:
             logger.info(f'Catchment {i} is not within lidar extent, ignor it.')
 
