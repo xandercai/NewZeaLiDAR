@@ -285,7 +285,7 @@ def retrieve_lidar(engine,
     then retrieve the .laz file path, tile index file from tile table and lidar table,
     in the end return a dictionary of dataset name, crs, .laz file path and tile index file.
     """
-    datasets_dict, geometry, tile_path_list = retrieve_dataset(
+    datasets_dict, geometry, tile_path_list, _ = retrieve_dataset(
         engine, boundary_file, sort_by, buffer=buffer
     )
     for dataset_name in datasets_dict.keys():
