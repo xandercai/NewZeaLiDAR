@@ -336,6 +336,9 @@ def run(roi_id: Union[int, str, list] = None,
     else:
         raise ValueError(f"Input parameters are not correct.")
 
+    # filter out Waikato dataset
+    dataset = [name for name in dataset if 'LiDAR_' not in name]
+
     if len(dataset) < 1:
         logger.warning(f"No dataset found in the region of interest, please check the input parameters.")
         engine.dispose()
