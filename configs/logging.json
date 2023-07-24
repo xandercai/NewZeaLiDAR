@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "disable_existing_loggers": true,
+  "disable_existing_loggers": false,
   "formatters": {
     "standard": {
       "format": "%(asctime)s - %(levelname)s - %(name)s - %(module)s::%(funcName)s - %(message)s",
@@ -64,6 +64,12 @@
     },
 
     "distributed.utils_perf": {
+      "level": "WARNING",
+      "handlers": ["console"],
+      "propagate": false
+    },
+
+    "scrapy": {
       "level": "WARNING",
       "handlers": ["console"],
       "propagate": false
