@@ -236,7 +236,7 @@ def run() -> None:
                       'AppleWebKit/537.36 (KHTML, like Gecko) '
                       'Chrome/34.0.1847.131 Safari/537.36',
         'DOWNLOAD_DELAY': 1.5,  # to avoid request too frequently and get incomplete response.
-        'ITEM_PIPELINES': {'datasets.ExtraFilesPipeline': 1},
+        'ITEM_PIPELINES': {'src.datasets.ExtraFilesPipeline': 1},
         'FILES_STORE': './',
         'LOG_LEVEL': 'INFO',  # this setting does not working. custom_settings does not work neither. TODO: debug
     })
