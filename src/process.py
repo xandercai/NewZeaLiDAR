@@ -100,7 +100,6 @@ def gen_instructions(engine: object,
         instructions["instructions"]["datasets"]["lidar"]["open_topography"] = (
             utils.retrieve_dataset(engine,
                                    catchment_boundary_file,
-                                   instructions,
                                    'survey_end_date',
                                    buffer=buffer)[0])
         instructions["instructions"]["datasets"]["lidar"]["local"] = OrderedDict()
@@ -108,7 +107,6 @@ def gen_instructions(engine: object,
         instructions["instructions"]["datasets"]["lidar"]["local"] = (
             utils.retrieve_lidar(engine,
                                  catchment_boundary_file,
-                                 instructions,
                                  'survey_end_date',
                                  buffer=buffer))
         instructions["instructions"]["datasets"]["lidar"]["open_topography"] = OrderedDict()
