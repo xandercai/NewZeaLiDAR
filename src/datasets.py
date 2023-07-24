@@ -3,6 +3,7 @@
 This module is used to get LiDAR datasets information from opentopography.org and save to local database.
 It leverages scrapy to crawl the website and download dataset metadata and extent files to local storage.
 """
+import gc
 import logging
 import os
 import pathlib
@@ -60,6 +61,7 @@ class DatasetItem(scrapy.Item):
     extent_path = scrapy.Field()
     tile_path = scrapy.Field()
     datum = scrapy.Field()
+    private = scrapy.Field()
 
 
 class ExtraFilesPipeline(FilesPipeline):
@@ -82,6 +84,9 @@ class ExtraFilesPipeline(FilesPipeline):
 
     def item_completed(self, results, item, info):
         """Save crawled data to database."""
+        if item['private']:
+            logger.warning(f'Private dataset: {item["name"]} is not saved to database.')
+            return item
         engine = utils.get_database()
         create_table(engine, DATASET)
         timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %X')
@@ -133,6 +138,7 @@ class ExtraFilesPipeline(FilesPipeline):
         gdf_to_db.to_postgis('dataset', engine, index=False, if_exists="append")
         # check_table_duplication(engine, DATASET, 'name')
         engine.dispose()
+        gc.collect()
         return item
 
 
@@ -213,6 +219,9 @@ class DatasetSpider(CrawlSpider):
         item['meta_path'] = str(pathlib.PurePosixPath(data_path / pathlib.Path(item['name'] + '_Meta.xml')))
         item['extent_path'] = str(pathlib.PurePosixPath(data_path) / pathlib.Path(item['name'] + '_Extent.kml'))
         item['tile_path'] = str(pathlib.PurePosixPath(data_path) / pathlib.Path(item['name'] + '_TileIndex.zip'))
+        item['private'] = True if response.xpath(
+            '//text()[contains(., "Private Dataset")]'
+        ).extract() else False
         yield item
 
 
