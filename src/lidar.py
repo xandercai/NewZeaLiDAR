@@ -104,20 +104,38 @@ def get_roi_from_id(index: Union[int, str, list],
     return gdf_roi
 
 
-def get_lidar_data(data_path: Union[str, pathlib.Path], gdf: gpd.GeoDataFrame) -> None:
+def get_lidar_data(data_path: Union[str, pathlib.Path],
+                   dataset: Union[str, list] = None,
+                   gdf: gpd.GeoDataFrame = None) -> None:
     """
     Download the LiDAR data within the catchment area from opentopography using geoapis.
     https://github.com/niwa/geoapis
     """
-    lidar_fetcher = geoapis.lidar.OpenTopography(
-        cache_path=data_path,
-        # note that the search_polygon added buffer by default in geoapis response,
-        # no need to add buffer here.
-        search_polygon=gdf,
-        download_limit_gbytes=800,
-        verbose=True
-    )
-    lidar_fetcher.run()
+    if gdf is not None and not gdf.empty:
+        lidar_fetcher = geoapis.lidar.OpenTopography(
+            cache_path=data_path,
+            # note that the search_polygon added buffer by default in geoapis response,
+            # no need to add buffer here.
+            search_polygon=gdf,
+            download_limit_gbytes=800,
+            verbose=True
+        )
+        lidar_fetcher.run()
+    elif dataset is not None:  # to process OpenTopography private datasets, if we use polygon search, geoapi will exit.
+        dataset = [dataset] if not isinstance(dataset, list) else dataset
+        logging.info(f"Start downloading dataset:\n{dataset}")
+        for dataset_name in dataset:
+            lidar_fetcher = geoapis.lidar.OpenTopography(
+                cache_path=data_path,
+                # note that the search_polygon added buffer by default in geoapis response,
+                # no need to add buffer here.
+                # search_polygon=gdf,
+                download_limit_gbytes=100,
+                verbose=True
+            )
+            lidar_fetcher.run(dataset_name=dataset_name)
+    else:
+        raise ValueError(f"Input parameters are not correct, please check them.")
 
 
 def gen_tile_data(gdf_in: gpd.GeoDataFrame, dataset: str) -> gpd.GeoDataFrame:
@@ -286,12 +304,13 @@ def store_data_to_db(engine, data_path: Union[str, pathlib.Path]) -> None:
 def run(roi_id: Union[int, str, list] = None,
         roi_file: Union[str, pathlib.Path] = r'configs/demo.geojson',
         roi_gdf: gpd.GeoDataFrame = None,
-        buffer: Union[int, float] = 0) -> None:
+        buffer: Union[int, float] = 20) -> None:
     """
     Main function for download lidar data from OpenTopography.
-    :param roi_id: catchment id for 'sea_drain_catchment' table.
+
+    :param roi_id: catchment id for 'sea_drain_catchment' or 'catchment' table.
     :param roi_gdf: region of interest boundary, a geodataframe with geometry column.
-    :param roi_file: region of interest boundary file path.
+    :param roi_file: region of interest boundary file path, support one file only.
     :param buffer: buffer distance for roi_gdf.
     """
     engine = utils.get_database()
@@ -302,15 +321,18 @@ def run(roi_id: Union[int, str, list] = None,
         dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
         catch_path = data_dir / dem_dir
         roi_gdf = get_roi_from_id(roi_id, catch_path)
-    elif isinstance(roi_file, (str, pathlib.Path)):  # roi_file get higher priority then roi_gdf
-        roi_gdf = get_roi_from_file(roi_file)
+
+    if roi_gdf is not None and not roi_gdf.empty:
+        _, _, _, dataset = utils.retrieve_dataset(engine, boundary_df=roi_gdf, buffer=buffer)
+    elif pathlib.Path(roi_file).exists():
+        _, _, _, dataset = utils.retrieve_dataset(engine, boundary_file=roi_file, buffer=buffer)
     else:
-        assert isinstance(roi_gdf, gpd.GeoDataFrame), (
-            "Please provide region of interest boundary by id (of supported tables), file path or geodataframe."
-        )
-    if buffer != 0:
-        roi_gdf['geometry'] = roi_gdf['geometry'].buffer(buffer, join_style='mitre')
-    get_lidar_data(data_path, roi_gdf)
+        raise ValueError(f"Input parameters are not correct.")
+
+    if len(dataset) < 1:
+        logger.warning(f"No dataset found in the region of interest, please check the input parameters.")
+
+    get_lidar_data(data_path, dataset=dataset)
     store_data_to_db(engine, data_path)
     engine.dispose()
 
