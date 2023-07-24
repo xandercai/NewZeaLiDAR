@@ -64,15 +64,11 @@ def gen_instructions(engine: object,
                      mode: str = 'api',
                      buffer: Union[int, float] = 0) -> OrderedDict:
     """Read basic instruction file and adds keys and uses geojson as catchment_boundary"""
-    n_cpu = os.cpu_count()
-    instructions["instructions"]["processing"]["number_of_cores"] = n_cpu - 1 if n_cpu > 8 else n_cpu
+    instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
     data_dir = pathlib.PurePosixPath(utils.get_env_variable("DATA_DIR"))
     dem_dir = pathlib.PurePosixPath(utils.get_env_variable("DEM_DIR"))
     index_dir = pathlib.PurePosixPath(str(index))
-    # subfolder_for_files = pathlib.PurePosixPath(dem_dir / index_dir)
-    # subfolder_for_instructions = pathlib.PurePosixPath(f'../{str(subfolder_for_files)}')
     subfolder = pathlib.PurePosixPath(dem_dir / index_dir)
-
     if instructions["instructions"].get("data_paths") is None:
         instructions["instructions"]["data_paths"] = OrderedDict()
     instructions["instructions"]["data_paths"]["local_cache"] = str(data_dir)
@@ -110,7 +106,6 @@ def gen_instructions(engine: object,
                                  'survey_end_date',
                                  buffer=buffer))
         instructions["instructions"]["datasets"]["lidar"]["open_topography"] = OrderedDict()
-
     # for debug
     instructions_path = str(pathlib.PurePosixPath(data_dir /
                                                   subfolder /
