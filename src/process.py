@@ -233,7 +233,7 @@ def run(catch_id: Union[int, str, list] = None,
     utils.map_dataset_name_with_id(engine, 'dataset', instructions_file)
 
     # note the priority of selected catch_id > area limit > all catchments
-    if catch_id is not None:
+    if catch_id is not None and catch_id > 0:
         catch_id = [catch_id] if not isinstance(catch_id, list) else catch_id
         logger.debug(f'check catch_id: {catch_id} is valid or not.')
         _gdf = pd.read_sql(f"SELECT catch_id FROM {SDC.__tablename__} ;", engine)
