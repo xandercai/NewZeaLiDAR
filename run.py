@@ -29,7 +29,7 @@ if __name__ == '__main__':
     catchments.run()
     datasets.run()
     datasets_waikato.run()
-    lidar.run(catchment_list)
+    # lidar.run(catchment_list)
     # lidar.run(nz_mainland)
     lidar.run(roi_id=catchment_list, buffer=buffer)
     lidar_waikato.run()
