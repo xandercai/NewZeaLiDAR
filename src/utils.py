@@ -294,7 +294,7 @@ def retrieve_lidar(engine,
                     AND dataset = '{dataset_name}' ;"""
         gdf = gpd.read_postgis(query, engine, geom_col='geometry')
         assert len(gdf) > 0, f"{dataset_name} does not have any tile in the ROI geometry."
-        uuid = tuple(gdf['uuid'].to_list()) if len(gdf) > 1 else str(f'({gdf["uuid"].values[0]})')
+        uuid = tuple(gdf['uuid'].to_list()) if len(gdf) > 1 else str(f"""('{gdf["uuid"].values[0]}')""")
         query = f"SELECT file_path FROM lidar WHERE uuid IN {uuid} ;"
         df = pd.read_sql(query, engine)
         assert len(df) > 0, f"{dataset_name} does not have any .laz file in the ROI geometry."
