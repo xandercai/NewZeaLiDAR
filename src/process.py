@@ -22,7 +22,7 @@ import pandas as pd
 from collections import OrderedDict
 
 from src import utils
-from src.tables import (Ttable, SDC, CATCHMENT, DEM, create_table,
+from src.tables import (Ttable, SDC, CATCHMENT, DEM, DATASET, create_table,
                         get_data_by_id, get_split_catchment_by_id, get_id_under_area, check_table_duplication)
 
 from geofabrics import processor
@@ -276,7 +276,7 @@ def run(catch_id: Union[int, str, list] = None,
         lidar_extent = gpd.read_file(lidar_extent_file)
     else:
         # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
-        lidar_extent = utils.gen_table_extent(engine, CATCHMENT)
+        lidar_extent = utils.gen_table_extent(engine, DATASET)
         # save lidar extent to check on QGIS
         if gpkg:
             lidar_extent.to_file(str(gpkg_dir / pathlib.Path('lidar_extent.gpkg')), driver='GPKG')

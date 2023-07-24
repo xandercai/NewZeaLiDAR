@@ -18,12 +18,12 @@ from src import catchments, datasets, datasets_waikato, lidar, lidar_waikato, pr
 catchment_list = 1394
 # full catchments
 # nz_mainland = r'../NewZeaLidar/configs/nz_mainland.geojson'
-demo = r'../NewZeaLidar/configs/demo.geojson'
+# demo = r'../NewZeaLidar/configs/demo.geojson'
 # catchment_list = -1
 buffer = 20
 
 if __name__ == '__main__':
-    logs.setup_logging()
+    logs.setup_logging(default_level=logging.INFO)
     # logs.print_logger()
     # catchments.run(gpkg=True)
     catchments.run()
