@@ -43,10 +43,10 @@ Generated data ---- Gap in gap table ---------- 32_000_001 - 40_000_000
 To implement about catch_id range, set the following global constant:
 
 e.g.:
-    A large catchment, catch_id = 1_234, split into subordinate catchments (Order5 or/and Order4) and split catchments, 
+    A large catchment, catch_id = 1_234, split into subordinate catchments (Order5 or/and Order4) and split catchments,
     the start catch_id of split catchments can be calculated as below:
         catch_id * SPLIT_SHIFT + SPLIT_OFFSET = 1_234 * 1_000 + 20_000_001 = 20_1234_001
-        
+
 Note that the upper limits of the above range are not checked since they will not be exceeded logically.
 """
 COAST_OFFSET = 20_001

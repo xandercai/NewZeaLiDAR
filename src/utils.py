@@ -127,7 +127,13 @@ def get_engine(db: str, user: str, host: str, port: str, password: str,
     """
     url = f'postgresql://{user}:{password}@{host}:{port}/{db}'
     poolclass = NullPool if null_pool else None
-    engine = create_engine(url, poolclass=poolclass, pool_pre_ping=pool_pre_ping)
+    engine = create_engine(url,
+                           poolclass=poolclass,
+                           pool_pre_ping=pool_pre_ping,
+                           connect_args={"keepalives": 1,
+                                         "keepalives_idle": 30,
+                                         "keepalives_interval": 10,
+                                         "keepalives_count": 5,})
     Base.metadata.create_all(engine)
     return engine
 

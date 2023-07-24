@@ -150,10 +150,9 @@ def gen_tile_data(gdf_in: gpd.GeoDataFrame, dataset: str) -> gpd.GeoDataFrame:
         # gdf['max_y'] = gdf_in['MaxY'].copy()
         gdf['geometry'] = gdf_in['geometry'].copy()
     crs = gdf_in.crs
-    if '2193' in str(crs):
-        gdf = gdf.set_crs(crs)
-    else:
-        logger.warning(f"Tile index data has crs {crs}, converting to epsg:2193.")
+    gdf = gdf.set_crs(crs)
+    if not '2193' in str(crs) or not 'NZGD2000' in str(crs):
+        logger.warning(f"Tile index file {gdf['file_name'].to_list()} has crs {str(crs)}, converting to epsg:2193.")
         gdf = gdf.to_crs(epsg=2193)
     gdf['uuid'] = gdf.apply(lambda x: uuid.uuid4(), axis=1)
     gdf['dataset'] = gdf.apply(lambda x: dataset, axis=1)
