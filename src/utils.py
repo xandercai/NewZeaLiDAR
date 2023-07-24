@@ -240,27 +240,30 @@ def get_geometry_by_file(boundary_file: Union[str, pathlib.Path], buffer: Union[
 
 
 def retrieve_dataset(engine,
-                     boundary_file: Union[str, pathlib.Path],
-                     instructions: dict,
+                     boundary_file: Union[str, pathlib.Path] = None,
                      sort_by: str = 'survey_end_date',
-                     buffer: Union[int, float] = 0) -> tuple:
+                     buffer: Union[int, float] = 0,
+                     boundary_df: gpd.GeoDataFrame = None
+                     ) -> tuple:
     """
     Read boundary geometry boundary_file,
     Query dataset to get dataset name which covers the geometry based on the boundary geometry,
     Sort the dataset name by 'sort_by', and return a dictionary of dataset name and crs.
     To safeguard the data/tile integrity, the geometry is buffered by 'buffer' distance, no buffer by default.
+
     :param engine: sqlalchemy engine
+    :param boundary_df: boundary geodataframe, higher priority than boundary_file.
     :param boundary_file: boundary file path, geojson format. see demo examples in 'configs' directory.
-    :param instructions: instructions dictionary. see base instructions file 'instructions.json' in 'configs' directory.
     :param sort_by: sort dataset name by this column, default is 'survey_end_date'.
     :param buffer: buffer for the boundary geometry, default is 0.
     """
-    resolution = (instructions["instructions"]["output"]["grid_params"]["resolution"]
-                  if 'resolution' in instructions["instructions"]["output"]["grid_params"]
-                  else None)
-    assert isinstance(resolution, int), f'Resolution is not defined in instructions or data type is not Integer.'
-    # resolution * buffer_factor is the margin for aligning the grid, can be changed
-    geometry = get_geometry_by_file(boundary_file, buffer=buffer)
+    if boundary_df is not None:
+        geometry = (boundary_df['geometry'].values[0].buffer(buffer, join_style='mitre')
+                    if buffer != 0 else boundary_df['geometry'].values[0])
+    elif boundary_file is not None:
+        geometry = get_geometry_by_file(boundary_file, buffer=buffer)
+    else:
+        raise ValueError("Either boundary_df or boundary_file must be provided.")
     query = f"""SELECT name, {sort_by}, tile_path, geometry FROM dataset
                 WHERE ST_Intersects(geometry, ST_SetSRID('{geometry}'::geometry, 2193)) ;"""
     gdf = gpd.read_postgis(query, engine, geom_col='geometry')
@@ -268,12 +271,11 @@ def retrieve_dataset(engine,
     dataset_name_list = gdf['name'].to_list()
     tile_path_list = gdf['tile_path'].to_list()
     dataset_list = [(n, {"crs": {"horizontal": 2193, "vertical": 7839}}) for n in dataset_name_list]
-    return OrderedDict(dataset_list), geometry, tile_path_list
+    return OrderedDict(dataset_list), geometry, tile_path_list, dataset_name_list
 
 
 def retrieve_lidar(engine,
                    boundary_file: Union[str, pathlib.Path],
-                   instructions: dict,
                    sort_by: str = 'survey_end_date',
                    buffer: Union[int, float] = 0) -> dict:
     """
@@ -284,7 +286,7 @@ def retrieve_lidar(engine,
     in the end return a dictionary of dataset name, crs, .laz file path and tile index file.
     """
     datasets_dict, geometry, tile_path_list = retrieve_dataset(
-        engine, boundary_file, instructions, sort_by, buffer=buffer
+        engine, boundary_file, sort_by, buffer=buffer
     )
     for dataset_name in datasets_dict.keys():
         query = f"""SELECT uuid, geometry FROM tile
