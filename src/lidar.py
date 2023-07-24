@@ -2,6 +2,7 @@
 """
 This module is used to download the lidar data by API from opentopography website and save to lidar and tile table.
 """
+import gc
 import json
 import logging
 import os
@@ -120,7 +121,10 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
             download_limit_gbytes=800,
             verbose=True
         )
-        lidar_fetcher.run()
+        try:
+            lidar_fetcher.run()
+        except Exception as e:
+            logger.warning(f"Error: {e}")
     elif dataset is not None:  # to process OpenTopography private datasets, if we use polygon search, geoapi will exit.
         dataset = [dataset] if not isinstance(dataset, list) else dataset
         logging.info(f"Start downloading dataset:\n{dataset}")
@@ -133,7 +137,10 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
                 download_limit_gbytes=100,
                 verbose=True
             )
-            lidar_fetcher.run(dataset_name=dataset_name)
+            try:
+                lidar_fetcher.run(dataset_name=dataset_name)
+            except Exception as e:
+                logger.warning(f"Error: {e}")
     else:
         raise ValueError(f"Input parameters are not correct, please check them.")
 
@@ -331,10 +338,14 @@ def run(roi_id: Union[int, str, list] = None,
 
     if len(dataset) < 1:
         logger.warning(f"No dataset found in the region of interest, please check the input parameters.")
+        engine.dispose()
+        gc.collect()
+        return
 
     get_lidar_data(data_path, dataset=dataset)
     store_data_to_db(engine, data_path)
     engine.dispose()
+    gc.collect()
 
 
 if __name__ == '__main__':
