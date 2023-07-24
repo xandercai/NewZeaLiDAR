@@ -13,7 +13,7 @@ from sqlalchemy import Column, Integer, Float, String, Date, DateTime, inspect
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 
-from src.utils import timeit, get_database, cast_geodataframe
+from src import utils
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ def prepare_to_db(gdf_in: gpd.GeoDataFrame, check_empty: bool = True) -> gpd.Geo
         if list_empty:
             logger.warning(f"Filter out empty catchments: {list_empty}")
         gdf = gdf[gdf['area'] > EPS]
-    gdf = cast_geodataframe(gdf)
+    gdf = utils.cast_geodataframe(gdf)
     gdf['created_at'] = pd.Timestamp.now().strftime('%Y-%m-%d %X')
     columns = gdf.columns.to_list()
     _ = [columns.remove(x) for x in ['catch_id', 'area', 'geometry', 'created_at']]
@@ -255,7 +255,7 @@ def check_columns_up_to_3(table: Type[Ttable], column_1: str, column_2: str, col
     return c1, c2, c3
 
 
-# @timeit
+# @utils.timeit
 def check_table_duplication(engine,
                             table: Type[Ttable],
                             column_1: str,
@@ -290,7 +290,7 @@ def check_table_duplication(engine,
     return True if count_all > 0 else False
 
 
-# @timeit
+# @utils.timeit
 def deduplicate_table(engine,
                       table: Type[Ttable],
                       column_1: str,
@@ -535,7 +535,7 @@ def get_min_value(engine, table: Union[str, Type[Ttable]], column: str = 'id') -
 def check_all_table_duplicate():
     """Check all table duplication"""
     logger.info(f"*** Checking all table duplication ***")
-    engine = get_database()
+    engine = utils.get_database()
     logger.debug(f"*** Checking sea_draining_catchments table duplication ***")
     check_table_duplication(engine, SDC, 'catch_id')
     logger.debug(f"*** Checking dataset table duplication ***")
