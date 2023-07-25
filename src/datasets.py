@@ -8,6 +8,7 @@ import logging
 import os
 import pathlib
 import re
+import time
 from datetime import datetime
 
 import geopandas as gpd
@@ -18,6 +19,7 @@ from fiona.drvsupport import supported_drivers
 from scrapy.crawler import CrawlerProcess
 from scrapy.pipelines.files import FilesPipeline
 from scrapy.spiders import CrawlSpider
+from scrapy.exceptions import CloseSpider
 
 from src import utils
 from src.tables import DATASET, create_table, delete_table, get_max_value
@@ -246,7 +248,12 @@ def run() -> None:
         str(pathlib.Path(utils.get_env_variable('DATA_DIR')) / pathlib.Path(utils.get_env_variable('LIDAR_DIR')))
     )
     process.start()
+    time.sleep(180)  # sleep 3 minutes for scrapy to finish downloading files.
     logger.info('Finish crawling datasets from OpenTopography.')
+    try:
+        process.stop()
+    except CloseSpider as e:
+        logger.debug(f'Close spider: {e}')
 
 
 if __name__ == '__main__':
