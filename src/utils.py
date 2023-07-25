@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.engine import Engine
 
 from src import tables
 
@@ -114,7 +115,9 @@ def get_connection_from_profile(null_pool: bool = False, pool_pre_ping: bool = F
 def get_engine(db: str, user: str, host: str, port: str, password: str,
                null_pool: bool = False,
                pool_pre_ping: bool = False) -> Type[create_engine]:
-    """Get SQLalchemy engine using credentials.
+    """
+    Get SQLalchemy engine using credentials.
+    Add connect_args to keep connection alive incase of long running process.
 
     :param db: database name
     :param user: Username
@@ -133,7 +136,7 @@ def get_engine(db: str, user: str, host: str, port: str, password: str,
                            connect_args={"keepalives": 1,
                                          "keepalives_idle": 30,
                                          "keepalives_interval": 10,
-                                         "keepalives_count": 5,})
+                                         "keepalives_count": 5})
     Base.metadata.create_all(engine)
     return engine
 
@@ -213,7 +216,7 @@ def gen_boundary_file(data_path: Union[str, pathlib.Path],
     logging.info(f"Generate region of interest geojson file at {file_path}.")
 
 
-def map_dataset_name_with_id(engine, table: str, instructions_file: Union[str, pathlib.Path]) -> None:
+def map_dataset_name_with_id(engine: Engine, table: str, instructions_file: Union[str, pathlib.Path]) -> None:
     """Mapping dataset name with its id in the database, and save in a json file."""
     query = f"SELECT name, id FROM {table} ;"
     df = pd.read_sql(query, engine).sort_values(by='id')
@@ -239,7 +242,7 @@ def get_geometry_by_file(boundary_file: Union[str, pathlib.Path], buffer: Union[
             if buffer != 0 else gdf['geometry'].values[0])
 
 
-def retrieve_dataset(engine,
+def retrieve_dataset(engine: Engine,
                      boundary_file: Union[str, pathlib.Path] = None,
                      sort_by: str = 'survey_end_date',
                      buffer: Union[int, float] = 0,
@@ -274,7 +277,7 @@ def retrieve_dataset(engine,
     return OrderedDict(dataset_list), geometry, tile_path_list, dataset_name_list
 
 
-def retrieve_lidar(engine,
+def retrieve_lidar(engine: Engine,
                    boundary_file: Union[str, pathlib.Path],
                    sort_by: str = 'survey_end_date',
                    buffer: Union[int, float] = 0) -> dict:
@@ -313,7 +316,7 @@ def retrieve_lidar(engine,
     return datasets_dict
 
 
-def retrieve_catchment(engine, boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0) -> list:
+def retrieve_catchment(engine: Engine, boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0) -> list:
     """
     Read boundary geometry boundary_file,
     Query dataset to get catch_id which covers the geometry based on the boundary geometry,
@@ -332,7 +335,7 @@ def retrieve_catchment(engine, boundary_file: Union[str, pathlib.Path], buffer: 
     return catch_list
 
 
-def retrieve_dem(engine, boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0) -> pd.DataFrame:
+def retrieve_dem(engine: Engine, boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0) -> pd.DataFrame:
     """
     Read boundary geometry boundary_file,
     Query dataset to get file path which covers the geometry based on the boundary geometry,
@@ -481,15 +484,19 @@ def katana(geometry: shapely.geometry, threshold: Union[int, float], count: int 
     return final_result
 
 
-# def gen_lidar_extent(engine, resolution: int = 8, area: int = 1024) -> gpd.GeoDataFrame:
-def gen_table_extent(engine, table: Union[str, Type[Ttable]]) -> gpd.GeoDataFrame:
+def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]]) -> gpd.GeoDataFrame:
     """
-    Generate catchment extent from catchment table
+    Generate catchment extent from catchment table or DEM table.
     """
     if not isinstance(table, str):
         table = table.__tablename__
-    gdf = gpd.read_postgis(f"SELECT catch_id, geometry FROM {table}", engine, crs=2193, geom_col='geometry')
-    geom = gdf['geometry'].unary_union
+    if table == 'hydro_dem':
+        df = pd.read_sql(f"SELECT catch_id, extent_path FROM {table} ;", engine)
+        df['geometry'] = df['extent_path'].apply(lambda x: gpd.read_file(x).geometry[0])
+        gdf = gpd.GeoDataFrame(df[['catch_id', 'geometry']], crs='epsg:2193', geometry='geometry')
+    else:
+        gdf = gpd.read_postgis(f"SELECT catch_id, geometry FROM {table}", engine, crs=2193, geom_col='geometry')
+    geom = filter_geometry(gdf['geometry'])
     return gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
 
 
@@ -540,6 +547,7 @@ def delete_dir(directory: Union[str, pathlib.Path]) -> None:
         logger.info(f'Delete directory {directory}.')
 
 
+# TODO: debugging
 def get_netcdf_in_polygon(engine,
                           boundary_file: Union[str, pathlib.Path],
                           save_dir: Union[str, pathlib.Path],

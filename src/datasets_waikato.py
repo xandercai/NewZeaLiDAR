@@ -12,6 +12,7 @@ from typing import Union
 import geopandas as gpd
 import pandas as pd
 from fiona.drvsupport import supported_drivers
+from sqlalchemy.engine import Engine
 
 from src import utils
 from src.tables import DATASET, create_table, get_max_value, check_table_duplication
@@ -34,12 +35,13 @@ def get_extent_info(extent_file: Union[str, pathlib.Path]) -> gpd.GeoDataFrame:
     return gdf
 
 
-def store_dataset_to_db(engine,
+def store_dataset_to_db(engine: Engine,
                         data_path: Union[str, pathlib.Path],
                         gdf: gpd.GeoDataFrame,
                         dataset_dict: dict) -> None:
     """
     store dataset information to database.
+
     :param engine: database engine
     :param data_path: dataset path
     :param gdf: dataset extent information from kml file

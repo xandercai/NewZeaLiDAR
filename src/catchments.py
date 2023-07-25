@@ -16,6 +16,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely
 from geoapis.vector import WfsQueryBase
+from sqlalchemy.engine import Engine
 
 from src import tables
 from src import utils
@@ -116,7 +117,7 @@ def fetch_data_from_mfe(layer: int,
     return vector_fetcher.run(layer)
 
 
-def gen_source_catchment_table(engine, gpkg: bool = False) -> None:
+def gen_source_catchment_table(engine: Engine, gpkg: bool = False) -> None:
     """
     fetching catchment data from data.mfe.govt.nz and save to local database
     current version fetches sea draining catchments, order 5 catchments, order 4 catchments.
@@ -793,7 +794,7 @@ def gen_coast_catchments(coast_distance: Union[int, float] = COAST_DISTANCE,
                 f"catch_id range:\n{gdf['catch_id'].min()} - {gdf['catch_id'].max()}")
 
 
-def find_subordinate(engine,
+def find_subordinate(engine: Engine,
                      table: Union[Type[tables.Ttable], str],
                      geometry: shapely.Geometry,
                      buffer: Union[int, float] = CATCHMENT_RESOLUTION) -> gpd.GeoDataFrame:

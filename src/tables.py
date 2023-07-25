@@ -4,6 +4,7 @@ This module is used to define the database tables and utility functions for the 
 """
 import logging
 from typing import Type, TypeVar, Union
+import gc
 
 import geopandas as gpd
 import pandas as pd
@@ -12,6 +13,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import Column, Integer, Float, String, Date, DateTime, inspect
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.engine import Engine
 
 from src import utils
 
@@ -189,12 +191,12 @@ class COAST(Base):
     created_at = Column(DateTime)
 
 
-def create_table(engine, table: Type[Ttable]) -> None:
+def create_table(engine: Engine, table: Type[Ttable]) -> None:
     """Create table if it doesn't exist."""
     table.__table__.create(bind=engine, checkfirst=True)
 
 
-def delete_table(engine, table: Type[Ttable], column: str = None, key: str = None) -> None:
+def delete_table(engine: Engine, table: Type[Ttable], column: str = None, key: str = None) -> None:
     """Delete table records by key or delete all records, but keep table schema."""
     if isinstance(column, str) and isinstance(key, str):
         query = f"DELETE FROM {table.__table__} WHERE {column} = '{key}' ;"
@@ -230,7 +232,7 @@ def prepare_to_db(gdf_in: gpd.GeoDataFrame, check_empty: bool = True) -> gpd.Geo
     return gdf
 
 
-def create_catchment_table(engine, table: Type[Ttable], gdf: gpd.GeoDataFrame, columns: list, ) -> None:
+def create_catchment_table(engine: Engine, table: Type[Ttable], gdf: gpd.GeoDataFrame, columns: list, ) -> None:
     """
     Create or replace catchments table.
 
@@ -256,7 +258,7 @@ def check_columns_up_to_3(table: Type[Ttable], column_1: str, column_2: str, col
 
 
 # @utils.timeit
-def check_table_duplication(engine,
+def check_table_duplication(engine: Engine,
                             table: Type[Ttable],
                             column_1: str,
                             column_2: str = None,
@@ -291,7 +293,7 @@ def check_table_duplication(engine,
 
 
 # @utils.timeit
-def deduplicate_table(engine,
+def deduplicate_table(engine: Engine,
                       table: Type[Ttable],
                       column_1: str,
                       column_2: str = None,
@@ -365,23 +367,17 @@ def deduplicate_table(engine,
     assert query is not None, (
         f"Input values error: table {table}, columns {column_1} {column_2} {column_3}."
     )
-    # try:
-    #     result = engine.execute(query).fetchll()
-    #     for line in result:
-    #         logger.info(line[0])
-    # except Exception as e:
-    #     logger.error(f"Error: {e}")
     logger.debug(f"Table {table} deduplicating: columns: 1 {column_1}, 2 {column_2}, 3 {column_3} with index {index}.")
     engine.execute(query)
 
 
 # not used due to create_table will check table first.
-def is_table_exist(engine, table: str):
+def is_table_exist(engine: Engine, table: str):
     """Check table if it exists."""
     return inspect(engine).has_table(table)
 
 
-def read_postgis_table(engine,
+def read_postgis_table(engine: Engine,
                        table: Union[str, Type[Ttable]],
                        limit: int = 0,
                        sort_by: str = None,
@@ -404,7 +400,7 @@ def read_postgis_table(engine,
     return gpd.read_postgis(query, engine, geom_col="geometry")
 
 
-def get_data_by_id(engine,
+def get_data_by_id(engine: Engine,
                    table: Union[Type[Ttable], str],
                    index: Union[int, str, list],
                    geom_col: str = 'geometry') -> gpd.GeoDataFrame:
@@ -425,7 +421,7 @@ def get_data_by_id(engine,
     return df
 
 
-def get_adjacent_catchment_by_id(engine,
+def get_adjacent_catchment_by_id(engine: Engine,
                                  table: Type[Ttable],
                                  index: Union[int, str, list],
                                  buffer: Union[int, float] = CATCHMENT_RESOLUTION + EPS,
@@ -460,7 +456,7 @@ def get_adjacent_catchment_by_id(engine,
     return gdf_concat['catch_id'].unique().astype(dtype=int).tolist()
 
 
-def get_within_catchment_by_geometry(engine,
+def get_within_catchment_by_geometry(engine: Engine,
                                      table: Union[str, Type[Ttable]],
                                      geom: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries, pd.Series],
                                      buffer: Union[int, float] = -CATCHMENT_RESOLUTION*2-EPS,
@@ -499,7 +495,7 @@ def get_within_catchment_by_geometry(engine,
     return gpd.read_postgis(query, engine, geom_col='geometry')
 
 
-def read_postgres_table(engine, table: str, limit: int = 0) -> pd.DataFrame:
+def read_postgres_table(engine: Engine, table: str, limit: int = 0) -> pd.DataFrame:
     """Read table from postgres into DataFrame."""
     if limit == 0:
         query = f"SELECT * FROM {table} ;"
@@ -508,13 +504,13 @@ def read_postgres_table(engine, table: str, limit: int = 0) -> pd.DataFrame:
     return pd.read_sql(query, engine)
 
 
-def check_table_info(engine, table: str, schema: str = 'public'):
+def check_table_info(engine: Engine, table: str, schema: str = 'public'):
     """Get table information"""
     query = f"SELECT * FROM information_schema.columns WHERE table_schema = '{schema}' AND table_name = '{table}' ;"
     return pd.read_sql(query, engine)
 
 
-def get_max_value(engine, table: Union[str, Type[Ttable]], column: str = 'id') -> Union[int, float]:
+def get_max_value(engine: Engine, table: Union[str, Type[Ttable]], column: str = 'id') -> Union[int, float]:
     """Get max value of a column from table"""
     if not isinstance(table, str):
         query = f"SELECT MAX({column}) FROM {table.__tablename__} ;"
@@ -523,7 +519,7 @@ def get_max_value(engine, table: Union[str, Type[Ttable]], column: str = 'id') -
     return engine.execute(query).fetchall()[0][0]
 
 
-def get_min_value(engine, table: Union[str, Type[Ttable]], column: str = 'id') -> Union[int, float]:
+def get_min_value(engine: Engine, table: Union[str, Type[Ttable]], column: str = 'id') -> Union[int, float]:
     """Get min value of a column from table"""
     if not isinstance(table, str):
         query = f"SELECT MIN({column}) FROM {table.__tablename__} ;"
@@ -545,9 +541,10 @@ def check_all_table_duplicate():
     logger.debug(f"*** Checking lidar table duplication ***")
     check_table_duplication(engine, LIDAR, 'file_path')
     engine.dispose()
+    gc.collect()
 
 
-def get_id_under_area(engine, table: Union[str, Type[Ttable]], area: Union[int, float]) -> list:
+def get_id_under_area(engine: Engine, table: Union[str, Type[Ttable]], area: Union[int, float]) -> list:
     """Get catchment id list by area limit."""
     if not isinstance(table, str):
         table = table.__tablename__
@@ -556,12 +553,13 @@ def get_id_under_area(engine, table: Union[str, Type[Ttable]], area: Union[int, 
     return df.iloc[:, 0].to_list()  # the first column is catch_id by default.
 
 
-def get_catchment_by_area_range(engine,
+def get_catchment_by_area_range(engine: Engine,
                                 table: Union[str, Type[Ttable]],
                                 upper_area: Union[int, float, None],
                                 lower_area: Union[int, float, None]) -> gpd.GeoDataFrame:
     """
     Get catchment id list by area limit.
+
     :param engine: database engine
     :param table: table name
     :param upper_area: upper area limit
@@ -582,7 +580,7 @@ def get_catchment_by_area_range(engine,
     return gdf
 
 
-def get_split_catchment_by_id(engine,
+def get_split_catchment_by_id(engine: Engine,
                               index: Union[str, int, list],
                               sub: bool = True) -> list:
     """
@@ -597,7 +595,7 @@ def get_split_catchment_by_id(engine,
     table = SDCS.__tablename__
     if not isinstance(index, list):
         index = [index]
-    index = tuple(index) if len(index) > 1 else str(f"({index[0]})")
+    index = tuple(index) if len(index) > 1 else str(f"('{index[0]}')")
     column = ['super_id', 'catch_id']
     if sub:
         query = f"""SELECT * FROM {table} WHERE {column[0]} in {index} ;"""

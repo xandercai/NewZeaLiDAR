@@ -20,6 +20,7 @@ from typing import Union, Type
 import geopandas as gpd
 import pandas as pd
 from collections import OrderedDict
+from sqlalchemy.engine import Engine
 
 from src import utils
 from src.tables import (Ttable, SDC, CATCHMENT, DEM, DATASET, create_table,
@@ -58,7 +59,7 @@ def save_instructions(instructions: OrderedDict, instructions_path: str) -> None
         json.dump(instructions, f, default=_recursive_str, indent=2)
 
 
-def gen_instructions(engine: object,
+def gen_instructions(engine: Engine,
                      instructions: OrderedDict,
                      index: int,
                      mode: str = 'api',
@@ -122,7 +123,7 @@ def gen_dem(instructions) -> None:
     runner.run()
 
 
-def single_process(engine: object,
+def single_process(engine: Engine,
                    instructions: OrderedDict,
                    index: int,
                    mode: str = 'api',
@@ -145,7 +146,7 @@ def single_process(engine: object,
     return single_instructions
 
 
-def store_hydro_to_db(engine, table: Type[Ttable], instructions: OrderedDict) -> None:
+def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: OrderedDict) -> None:
     """save hydrological conditioned dem to database in hydro table."""
     assert len(instructions) > 0, 'instructions is empty dictionary.'
     index = os.path.basename(instructions["instructions"]["data_paths"]["subfolder"])
@@ -204,7 +205,7 @@ def run(catch_id: Union[int, str, list] = None,
         area: Union[int, float] = None,
         mode: str = 'api',
         buffer: float = 10,
-        gpkg: bool = False) -> None:
+        gpkg: bool = True) -> None:
     """
     Main function for generate hydrological conditioned dem of catchments.
     :param catch_id: the id of target catchments, if id is negative, get all catchments in the catchment table.
@@ -227,37 +228,47 @@ def run(catch_id: Union[int, str, list] = None,
     # generate dataset mapping info
     utils.map_dataset_name_with_id(engine, 'dataset', instructions_file)
 
-    # note the priority of selected catch_id > area limit > all catchments
-    if catch_id is not None and catch_id > 0:
-        catch_id = [catch_id] if not isinstance(catch_id, list) else catch_id
-        logger.debug(f'check catch_id: {catch_id} is valid or not.')
-        _gdf = pd.read_sql(f"SELECT catch_id FROM {SDC.__tablename__} ;", engine)
-        sdc_id = sorted(_gdf['catch_id'].to_list())
-        _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
-        catchment_id = sorted(_gdf['catch_id'].to_list())
-        new_id = []
-        for i in catch_id:
-            if i in catchment_id:  # small catchment
-                new_id.append(i)
-            elif i in sdc_id and i not in catchment_id:  # large catchment, search subordinates
-                _list = get_split_catchment_by_id(engine, i, sub=True)
-                if len(_list) > 0:
-                    new_id.extend(_list)
-                    logger.debug(f'Catchment {i} split to {len(_list)} subordinates {_list}.')
+    # note the priority of catch_id > area limit
+    if catch_id is not None:
+        if isinstance(catch_id, int) and catch_id > 0:
+            catch_id = [catch_id]
+        if isinstance(catch_id, str):
+            assert catch_id.isdigit(), 'catch_id must be integer.'
+            catch_id = [catch_id]
+
+    if catch_id is not None:
+        logger.debug(f'Check catch_id: {catch_id} validation.')
+        if isinstance(catch_id, str):
+            assert catch_id.isdigit(), 'Input catch_id must be integer.'
+        if isinstance(catch_id, int) and catch_id <= 0:
+            _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
+            catch_id = sorted(_gdf['catch_id'].to_list())
+            logger.info(f'******* FULL CATCHMENTS MODE *********\nThere are {len(catch_id)} Catchments in total.')
+        else:
+            catch_id = [catch_id] if isinstance(catch_id, (int, str)) else catch_id
+            _gdf = pd.read_sql(f"SELECT catch_id FROM {SDC.__tablename__} ;", engine)
+            sdc_id = sorted(_gdf['catch_id'].to_list())
+            _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
+            catchment_id = sorted(_gdf['catch_id'].to_list())
+            new_id = []
+            for i in catch_id:
+                if i in catchment_id:  # small catchment
+                    new_id.append(i)
+                elif i in sdc_id and i not in catchment_id:  # large catchment, search subordinates
+                    _list = get_split_catchment_by_id(engine, i, sub=True)
+                    if len(_list) > 0:
+                        new_id.extend(_list)
+                        logger.debug(f'Catchment {i} split to {len(_list)} subordinates {_list}.')
+                    else:
+                        logger.warning(f'Catchment {i} is not in `catchment` table, '
+                                       f'please check if it is duplicated or overlap with other catchments.')
                 else:
-                    logger.warning(f'Catchment {i} is not in catchment table, '
-                                   f'please check if it is duplicated or overlap with other catchments.')
-            else:
-                logger.warning(f'Catchment {i} is not in catchment table, ignore it.')
+                    logger.warning(f'Catchment {i} is not in catchment table, ignore it.')
+            catch_id = new_id
         logger.debug(f'check catch_id: pass.')
-        catch_id = new_id
     elif area is not None:
         catch_id = get_id_under_area(engine, SDC, area)
         logger.info(f'There are {len(catch_id)} Catchments that area is under {area} m2')
-    elif catch_id < 0:
-        _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
-        catch_id = sorted(_gdf['catch_id'].to_list())
-        logger.info(f'******* FULL CATCHMENTS MODE *********\nThere are {len(catch_id)} Catchments in total.')
     else:
         raise ValueError('Please provide catch_id or area_limit.')
 
@@ -300,15 +311,12 @@ def run(catch_id: Union[int, str, list] = None,
 
     # save lidar extent to check on QGIS
     if gpkg:
-        df_extent = pd.read_sql(f"SELECT catch_id, extent_path FROM {DEM.__tablename__} ;", engine)
-        df_extent['geometry'] = df_extent['extent_path'].apply(lambda x: gpd.read_file(x).geometry[0])
-        gdf_extent = gpd.GeoDataFrame(df_extent[['catch_id', 'geometry']], crs='epsg:2193', geometry='geometry')
-        geom_extent = gdf_extent['geometry'].unary_union
-        gdf_extent = gpd.GeoDataFrame(index=[0], crs='epsg:2193', geometry=[geom_extent])
-        gdf_extent.to_file(str(gpkg_dir / pathlib.Path(f'dem_extent_{time.strftime("%Y%m%d_%H%M%S")}.gpkg')),
+        dem_extent = utils.gen_table_extent(engine, DEM)
+        dem_extent.to_file(str(gpkg_dir / pathlib.Path(f'dem_extent_{time.strftime("%Y%m%d_%H%M%S")}.gpkg')),
                            driver='GPKG')
     if len(failed):
         logger.info(f'Failed {len(failed)} catchments: \n{failed}')
+
     logger.info(f"Total runtime: {sum(runtime, timedelta(0, 0))}\n"
                 f"Runtime for each catch_id:{json.dumps(runtime, indent=2, default=str)}")
     engine.dispose()

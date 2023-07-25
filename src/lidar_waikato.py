@@ -11,6 +11,7 @@ from typing import Union
 
 import geopandas as gpd
 import pandas as pd
+from sqlalchemy.engine import Engine
 
 from src import utils
 from src.lidar import store_lidar_to_db, check_file_number
@@ -64,7 +65,7 @@ def gen_tile_data(gdf_in: gpd.GeoDataFrame, dataset: str) -> gpd.GeoDataFrame:
     return gdf
 
 
-def store_tile_to_db(engine, dataset: str, tile_path: str) -> gpd.GeoDataFrame:
+def store_tile_to_db(engine: Engine, dataset: str, tile_path: str) -> gpd.GeoDataFrame:
     """
     Store tile information to tile table.
     Load the zip file where tile info are stored as shape file,
@@ -84,7 +85,7 @@ def store_tile_to_db(engine, dataset: str, tile_path: str) -> gpd.GeoDataFrame:
     return gdf_to_db
 
 
-def store_data_to_db(engine, data_path: Union[str, pathlib.Path], dataset_info: dict) -> None:
+def store_data_to_db(engine: Engine, data_path: Union[str, pathlib.Path], dataset_info: dict) -> None:
     """ store tile and lidar data into database. """
     count = 0
     for dataset, tile_dir, dataset_dir in zip(dataset_info["name"],

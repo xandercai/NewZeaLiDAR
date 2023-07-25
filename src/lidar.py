@@ -14,6 +14,7 @@ from typing import Union
 import geoapis.lidar
 import geopandas as gpd
 import pandas as pd
+from sqlalchemy.engine import Engine
 
 from src import utils
 from src.tables import TILE, LIDAR, SDC, CATCHMENT, create_table, deduplicate_table, get_data_by_id
@@ -236,7 +237,7 @@ def gen_lidar_data(gdf_in: gpd.GeoDataFrame, file_path: str) -> pd.DataFrame:
     return df
 
 
-def store_tile_to_db(engine, file_path: str) -> gpd.GeoDataFrame:
+def store_tile_to_db(engine: Engine, file_path: str) -> gpd.GeoDataFrame:
     """
     Store tile information to tile table.
     Load the zip file where tile info are stored as shape file,
@@ -259,7 +260,7 @@ def store_tile_to_db(engine, file_path: str) -> gpd.GeoDataFrame:
     return gdf_to_db
 
 
-def store_lidar_to_db(engine, file_path: str, gdf: gpd.GeoDataFrame) -> int:
+def store_lidar_to_db(engine: Engine, file_path: str, gdf: gpd.GeoDataFrame) -> int:
     """
     To store the path of downloaded point cloud files with geometry annotation.
     gdf: dataframe from tile table.
@@ -286,7 +287,7 @@ def check_file_number(data_path: Union[str, pathlib.Path], expect: int) -> None:
         )
 
 
-def store_data_to_db(engine, data_path: Union[str, pathlib.Path]) -> None:
+def store_data_to_db(engine: Engine, data_path: Union[str, pathlib.Path]) -> None:
     """ store tile and lidar data info into database. """
     count = 0
     runtime = []
