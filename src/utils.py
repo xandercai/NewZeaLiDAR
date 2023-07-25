@@ -491,13 +491,38 @@ def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]]) -> gpd.Geo
     if not isinstance(table, str):
         table = table.__tablename__
     if table == 'hydro_dem':
-        df = pd.read_sql(f"SELECT catch_id, extent_path FROM {table} ;", engine)
+        df = pd.read_sql(f"SELECT * FROM {table} ;", engine)
         df['geometry'] = df['extent_path'].apply(lambda x: gpd.read_file(x).geometry[0])
         gdf = gpd.GeoDataFrame(df[['catch_id', 'geometry']], crs='epsg:2193', geometry='geometry')
     else:
-        gdf = gpd.read_postgis(f"SELECT catch_id, geometry FROM {table}", engine, crs=2193, geom_col='geometry')
+        gdf = gpd.read_postgis(f"SELECT * FROM {table}", engine, crs=2193, geom_col='geometry')
     geom = filter_geometry(gdf['geometry'])
     return gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
+
+
+def check_dem_exist_by_id(engine: Engine, index) -> bool:
+    """
+    Check if the DEM file exists in the database by catch_id
+    """
+    result = True
+    query = f"SELECT * FROM hydro_dem WHERE catch_id = {index} ;"
+    df = pd.read_sql(query, engine)
+    if df.empty:
+        result = False
+    else:
+        hydro_dem_path = df['hydro_dem_path'].values[0]
+        raw_dem_path = df['raw_dem_path'].values[0]
+        extent_path = df['extent_path'].values[0]
+        if not pathlib.Path(hydro_dem_path).exists():
+            logging.debug(f'Expected Hydro DEM File {hydro_dem_path} does not exist.')
+            result = False
+        if not pathlib.Path(raw_dem_path).exists():
+            logging.debug(f'Expected Raw DEM File {raw_dem_path} does not exist.')
+            result = False
+        if not pathlib.Path(extent_path).exists():
+            logging.debug(f'Expected Extent File {extent_path} does not exist.')
+            result = False
+    return result
 
 
 def save_gpkg(gdf: gpd.GeoDataFrame, table: Union[Type[Ttable], str]):

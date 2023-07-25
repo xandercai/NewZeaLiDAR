@@ -205,6 +205,7 @@ def run(catch_id: Union[int, str, list] = None,
         area: Union[int, float] = None,
         mode: str = 'api',
         buffer: float = 10,
+        faster: bool = False,
         gpkg: bool = True) -> None:
     """
     Main function for generate hydrological conditioned dem of catchments.
@@ -215,6 +216,7 @@ def run(catch_id: Union[int, str, list] = None,
         If mode is 'local', the lidar data will be downloaded from local directory.
     :param buffer: the catchment boundary buffer for safeguard catchment boundary,
         default value is 10 meters.
+    :param faster: if True, check if the hydrological conditioned dem already exist, if exist, skip the process.
     :param gpkg: if True, save the hydrological conditioned dem as geopackage.
     """
     engine = utils.get_database()
@@ -288,6 +290,9 @@ def run(catch_id: Union[int, str, list] = None,
     runtime = []
     failed = []
     for i in catch_id:
+        if faster and utils.check_dem_exist_by_id(engine, i):
+            logger.info(f'Catchment {i} already has hydrological conditioned dem, skip it.')
+            continue
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # check if catchment boundary of RoI within lidar extent
         if lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
@@ -306,14 +311,14 @@ def run(catch_id: Union[int, str, list] = None,
             end = datetime.now()
             runtime.append(end - start)
             store_hydro_to_db(engine, DEM, single_instructions)
+
+            # save lidar extent to check on QGIS
+            if gpkg:
+                dem_extent = utils.gen_table_extent(engine, DEM)
+                dem_extent.to_file(str(gpkg_dir / pathlib.Path(f'dem_extent.gpkg')), driver='GPKG')
         else:
             logger.info(f'Catchment {i} is not within lidar extent, ignor it.')
 
-    # save lidar extent to check on QGIS
-    if gpkg:
-        dem_extent = utils.gen_table_extent(engine, DEM)
-        dem_extent.to_file(str(gpkg_dir / pathlib.Path(f'dem_extent_{time.strftime("%Y%m%d_%H%M%S")}.gpkg')),
-                           driver='GPKG')
     if len(failed):
         logger.info(f'Failed {len(failed)} catchments: \n{failed}')
 

@@ -299,7 +299,7 @@ def store_data_to_db(engine: Engine, data_path: Union[str, pathlib.Path]) -> Non
             gdf = store_tile_to_db(engine, file_path)
             count += store_lidar_to_db(engine, file_path, gdf)
         else:
-            logger.warning(f'No cloud point file in {file_path}, ignore it.')
+            logger.debug(f'No cloud point file in {file_path}, ignore it.')
         end = datetime.now()
         runtime.append(end - start)
     logger.debug(f"Total runtime: {sum(runtime, timedelta(0, 0))}\n"
