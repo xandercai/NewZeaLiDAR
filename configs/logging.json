@@ -58,7 +58,7 @@
     },
 
     "distributed.worker": {
-      "level": "WARNING",
+      "level": "CRITICAL",
       "handlers": ["console"],
       "propagate": false
     },
