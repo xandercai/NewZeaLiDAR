@@ -296,11 +296,15 @@ def retrieve_lidar(engine: Engine,
                     WHERE ST_Intersects(geometry, ST_SetSRID('{geometry}'::geometry, 2193))
                     AND dataset = '{dataset_name}' ;"""
         gdf = gpd.read_postgis(query, engine, geom_col='geometry')
-        assert len(gdf) > 0, f"{dataset_name} does not have any tile in the ROI geometry."
+        if gdf.empty:
+            logger.info(f"{dataset_name} does not have any tile in the ROI geometry.")
+            continue
         uuid = tuple(gdf['uuid'].to_list()) if len(gdf) > 1 else str(f"""('{gdf["uuid"].values[0]}')""")
         query = f"SELECT file_path FROM lidar WHERE uuid IN {uuid} ;"
         df = pd.read_sql(query, engine)
-        assert len(df) > 0, f"{dataset_name} does not have any .laz file in the ROI geometry."
+        if df.empty:
+            logger.info(f"{dataset_name} does not have any .laz file in the ROI geometry.")
+            continue
         datasets_dict[dataset_name]["file_paths"] = [
             pathlib.PurePosixPath(p) for p in sorted(df['file_path'].to_list())
         ]
