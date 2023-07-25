@@ -252,6 +252,7 @@ def run() -> None:
     try:
         raise CloseSpider('Finish crawling datasets from OpenTopography.')
     except CloseSpider as e:
+        logger.info(e)
         pass
 
 
