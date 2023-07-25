@@ -250,9 +250,9 @@ def run() -> None:
     process.start()
     time.sleep(180)  # sleep 3 minutes for scrapy to finish downloading files.
     try:
-        raise CloseSpider('Finish crawling datasets from OpenTopography.')
-    except CloseSpider as e:
-        logger.info(e)
+        raise CloseSpider()
+    except CloseSpider:
+        logger.info('Finish crawling datasets from OpenTopography.')
         pass
 
 
