@@ -179,7 +179,7 @@ def gen_tile_data(gdf_in: gpd.GeoDataFrame, dataset: str) -> gpd.GeoDataFrame:
     crs = gdf_in.crs
     gdf = gdf.set_crs(crs)
     if '2193' not in str(crs):
-        logger.warning(f"Tile index file {gdf['file_name'].values[0]} has crs {str(crs)}, converting to epsg:2193.")
+        logger.warning(f"Tile index file of {dataset} has crs {str(crs)}, converting to epsg:2193.")
         gdf = gdf.to_crs(epsg=2193)
     gdf['uuid'] = gdf.apply(lambda x: uuid.uuid4(), axis=1)
     gdf['dataset'] = gdf.apply(lambda x: dataset, axis=1)
@@ -225,7 +225,7 @@ def gen_lidar_data(gdf_in: gpd.GeoDataFrame, file_path: str) -> pd.DataFrame:
     # since waidato lidar datasets have some missing tiles.
     nan_rows = df[df['uuid'].isnull()]
     if len(nan_rows) > 0:
-        logger.warning(f'Warning:: {len(nan_rows)} .laz files are not found in the tile index file.\n'
+        logger.warning(f'{len(nan_rows)} .laz files are not found in the tile index file.\n'
                        f'{nan_rows["file_name"].tolist()}')
         # the lidar files without tile info (geometry) are useless, here we save it to database as records.
         df.loc[df['uuid'].isnull(), 'uuid'] = df['uuid'].apply(lambda l: uuid.uuid4())
