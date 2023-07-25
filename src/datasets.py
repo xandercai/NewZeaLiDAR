@@ -249,7 +249,10 @@ def run() -> None:
     )
     process.start()
     time.sleep(180)  # sleep 3 minutes for scrapy to finish downloading files.
-    raise CloseSpider('Finish crawling datasets from OpenTopography.')
+    try:
+        raise CloseSpider('Finish crawling datasets from OpenTopography.')
+    except CloseSpider as e:
+        pass
 
 
 if __name__ == '__main__':
