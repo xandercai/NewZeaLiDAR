@@ -142,6 +142,7 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
                 lidar_fetcher.run(dataset_name=dataset_name)
             except Exception as e:
                 logger.error(f"Fetch lidar data by API error: {e}")
+                continue
     else:
         raise ValueError(f"Input parameters are not correct, please check them.")
 
