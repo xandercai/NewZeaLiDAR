@@ -125,7 +125,7 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
         try:
             lidar_fetcher.run()
         except Exception as e:
-            logger.warning(f"Error: {e}")
+            logger.error(f"Fetch lidar data by API error: {e}")
     elif dataset is not None:  # to process OpenTopography private datasets, if we use polygon search, geoapi will exit.
         dataset = [dataset] if not isinstance(dataset, list) else dataset
         logging.info(f"Start downloading dataset:\n{dataset}")
@@ -135,13 +135,13 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
                 # note that the search_polygon added buffer by default in geoapis response,
                 # no need to add buffer here.
                 # search_polygon=gdf,
-                download_limit_gbytes=200,
+                download_limit_gbytes=800,
                 verbose=True
             )
             try:
                 lidar_fetcher.run(dataset_name=dataset_name)
             except Exception as e:
-                logger.warning(f"Error: {e}")
+                logger.error(f"Fetch lidar data by API error: {e}")
     else:
         raise ValueError(f"Input parameters are not correct, please check them.")
 
@@ -312,6 +312,7 @@ def store_data_to_db(engine: Engine, data_path: Union[str, pathlib.Path]) -> Non
 def run(roi_id: Union[int, str, list] = None,
         roi_file: Union[str, pathlib.Path] = r'configs/demo.geojson',
         roi_gdf: gpd.GeoDataFrame = None,
+        name_base: bool = False,
         buffer: Union[int, float] = 20) -> None:
     """
     Main function for download lidar data from OpenTopography.
@@ -319,6 +320,7 @@ def run(roi_id: Union[int, str, list] = None,
     :param roi_id: catchment id for 'sea_drain_catchment' or 'catchment' table.
     :param roi_gdf: region of interest boundary, a geodataframe with geometry column.
     :param roi_file: region of interest boundary file path, support one file only.
+    :param name_base: if True, use dataset name retrieved form input to download lidar data.
     :param buffer: buffer distance for roi_gdf.
     """
     engine = utils.get_database()
@@ -329,24 +331,28 @@ def run(roi_id: Union[int, str, list] = None,
         dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
         catch_path = data_dir / dem_dir
         roi_gdf = get_roi_from_id(roi_id, catch_path)
-
-    if roi_gdf is not None and not roi_gdf.empty:
-        _, _, _, dataset = utils.retrieve_dataset(engine, boundary_df=roi_gdf, buffer=buffer)
-    elif pathlib.Path(roi_file).exists():
-        _, _, _, dataset = utils.retrieve_dataset(engine, boundary_file=roi_file, buffer=buffer)
+    if name_base:
+        if roi_gdf is not None and not roi_gdf.empty:
+            _, _, _, dataset = utils.retrieve_dataset(engine, boundary_df=roi_gdf, buffer=buffer)
+        elif pathlib.Path(roi_file).exists():
+            _, _, _, dataset = utils.retrieve_dataset(engine, boundary_file=roi_file, buffer=buffer)
+        else:
+            raise ValueError(f"Input parameters are not correct.")
+        # filter out Waikato dataset
+        dataset = [name for name in dataset if 'LiDAR_' not in name]
+        if len(dataset) < 1:
+            logger.warning(f"No dataset found in the region of interest, please check the input parameters.")
+            engine.dispose()
+            gc.collect()
+            return
+        get_lidar_data(data_path, dataset=dataset)
     else:
-        raise ValueError(f"Input parameters are not correct.")
-
-    # filter out Waikato dataset
-    dataset = [name for name in dataset if 'LiDAR_' not in name]
-
-    if len(dataset) < 1:
-        logger.warning(f"No dataset found in the region of interest, please check the input parameters.")
-        engine.dispose()
-        gc.collect()
-        return
-
-    get_lidar_data(data_path, dataset=dataset)
+        if roi_id is None and pathlib.Path(roi_file).exists():
+            roi_gdf = get_roi_from_file(roi_file)
+        if roi_gdf is not None and not roi_gdf.empty:
+            get_lidar_data(data_path, gdf=roi_gdf)
+        else:
+            raise ValueError(f"Input parameters are not correct.")
     store_data_to_db(engine, data_path)
     engine.dispose()
     gc.collect()
