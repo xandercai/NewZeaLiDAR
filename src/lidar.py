@@ -303,7 +303,11 @@ def store_data_to_db(engine: Engine, data_path: Union[str, pathlib.Path]) -> Non
     for directory in os.listdir(data_path):
         start = datetime.now()
         file_path = os.path.join(data_path, directory)
-        if os.path.isdir(file_path) and len(utils.get_files(['.laz', '.las'], file_path)) > 0:
+        if (
+                os.path.isdir(file_path) and
+                len(utils.get_files(['.laz', '.las'], file_path)) > 0 and
+                len(utils.get_files('.zip', file_path)) > 0
+        ):
             gdf = store_tile_to_db(engine, file_path)
             count += store_lidar_to_db(engine, file_path, gdf)
         else:
