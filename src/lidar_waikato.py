@@ -60,7 +60,7 @@ def gen_tile_data(gdf_in: gpd.GeoDataFrame, dataset: str) -> gpd.GeoDataFrame:
     if '2193' in str(crs):
         gdf = gdf.set_crs(crs)
     else:
-        logger.warning(f"Tile index data has crs {crs}, converting to epsg:2193.")
+        logger.warning(f"Tile index data of {dataset} has crs {crs}, converting to epsg:2193.")
         gdf = gdf.to_crs(crs)
     return gdf
 
@@ -93,7 +93,7 @@ def store_data_to_db(engine: Engine, data_path: Union[str, pathlib.Path], datase
                                               dataset_info["dataset_dir"]):
         logger.info(f"*** Processing {dataset} dataset ***")
         gdf = store_tile_to_db(engine, dataset, tile_dir)
-        count += store_lidar_to_db(engine, dataset_dir, gdf)
+        count += store_lidar_to_db(engine, dataset_dir, gdf, file_type='.laz')
     check_file_number(data_path, count)
 
 
@@ -127,7 +127,7 @@ def check_file_identity(dataset_info: dict, filetype: str = '.laz') -> None:
                     if file in duplicates.keys():
                         duplicates_files.append(str(pathlib.PurePosixPath(os.path.join(path, file))))
             logger.debug(f"{sub} .laz files have duplicate file name for the same tile index file:\n" +
-                          '\n'.join(map(str, duplicates_files)))
+                         '\n'.join(map(str, duplicates_files)))
             total += sub
     # assert total == 0, f"{total} .laz files have duplicate file."
     logger.info(f'Total {total} .laz files have duplicate file name for the same tile index file.')
