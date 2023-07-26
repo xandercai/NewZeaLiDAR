@@ -130,6 +130,12 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
         dataset = [dataset] if not isinstance(dataset, list) else dataset
         logging.info(f"Start downloading dataset:\n{dataset}")
         for dataset_name in dataset:
+            tile_file = (pathlib.Path(data_path) /
+                         pathlib.Path(f'{dataset_name}' /
+                         pathlib.Path(f'{dataset_name}_TileIndex.zip')))
+            if tile_file.exists():
+                logger.info(f"Tile index file {tile_file} already exists, delete it.")
+                tile_file.unlink()
             lidar_fetcher = geoapis.lidar.OpenTopography(
                 cache_path=data_path,
                 # note that the search_polygon added buffer by default in geoapis response,
