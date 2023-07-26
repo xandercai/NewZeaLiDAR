@@ -63,7 +63,7 @@ def setup_logging(
         with open(path, 'rt') as f:
             config = json.load(f)
         logging.config.dictConfig(config)
-    elif default_level is None:
+    elif default_level is not None:
         logging.basicConfig(level=default_level)
     else:
         logging.basicConfig(level=logging.INFO)
