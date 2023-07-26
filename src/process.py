@@ -26,6 +26,7 @@ from src import utils
 from src.tables import (Ttable, SDC, CATCHMENT, DEM, DATASET, create_table,
                         get_data_by_id, get_split_catchment_by_id, get_id_under_area, check_table_duplication)
 
+# sys.path.insert(0, str(pathlib.Path(r'../ForkGeoFabrics/src/geofabrics')))
 from geofabrics import processor
 
 logger = logging.getLogger(__name__)
@@ -99,14 +100,14 @@ def gen_instructions(engine: Engine,
                                    catchment_boundary_file,
                                    'survey_end_date',
                                    buffer=buffer)[0])
-        instructions["instructions"]["datasets"]["lidar"]["local"] = OrderedDict()
+        instructions["instructions"]["datasets"]["lidar"]["local"] = {}
     if mode == 'local':
         instructions["instructions"]["datasets"]["lidar"]["local"] = (
             utils.retrieve_lidar(engine,
                                  catchment_boundary_file,
                                  'survey_end_date',
                                  buffer=buffer))
-        instructions["instructions"]["datasets"]["lidar"]["open_topography"] = OrderedDict()
+        instructions["instructions"]["datasets"]["lidar"]["open_topography"] = {}
     # for debug
     instructions_path = str(pathlib.PurePosixPath(data_dir /
                                                   subfolder /
@@ -131,6 +132,9 @@ def single_process(engine: Engine,
     """the gen_dem process in a single row of geodataframe"""
     logger.info(f'*** Processing {index} in {mode} mode with geometry buffer {buffer} ...')
     single_instructions = gen_instructions(engine, instructions, index, mode=mode, buffer=buffer)
+    result_path = (pathlib.Path(single_instructions["instructions"]["data_paths"]["local_cache"]) /
+                   pathlib.Path(single_instructions['instructions']['data_paths']['subfolder']))
+    pathlib.Path(result_path).mkdir(parents=True, exist_ok=True)  # to label the catchment are processed even failed
     if mode == 'api':
         if not single_instructions["instructions"]["datasets"]["lidar"]["open_topography"]:
             logger.info(f'The {index} catchment has no lidar data exist.')
@@ -161,12 +165,9 @@ def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: Ordered
     # {index}_raw_dem_extent.geojson
     raw_extent_path = str(dir_path /
                           pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem_extents"]))
-    raw_dem_path_exist = os.path.exists(raw_dem_path)
-    result_dem_path_exist = os.path.exists(result_dem_path)
-    raw_extent_path_exist = os.path.exists(raw_extent_path)
-    assert raw_dem_path_exist, f'Warning: File {raw_dem_path} not exist.'
-    assert result_dem_path_exist, f'Warning: File {result_dem_path} not exist.'
-    assert raw_extent_path_exist, f'Warning: File {raw_extent_path} not exist.'
+    assert os.path.exists(raw_dem_path), f'File {raw_dem_path} not exist.'
+    assert os.path.exists(result_dem_path), f'File {result_dem_path} not exist.'
+    assert os.path.exists(raw_extent_path), f'File {raw_extent_path} not exist.'
     timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %X')
     create_table(engine, table)
     query = f"SELECT * FROM {table.__tablename__} WHERE catch_id = '{index}' ;"
