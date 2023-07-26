@@ -194,7 +194,9 @@ def gen_tile_data(gdf_in: gpd.GeoDataFrame, dataset: str) -> gpd.GeoDataFrame:
     return gdf
 
 
-def gen_lidar_data(gdf_in: gpd.GeoDataFrame, file_path: str) -> pd.DataFrame:
+def gen_lidar_data(gdf_in: gpd.GeoDataFrame,
+                   file_path: Union[str, pathlib.Path],
+                   file_type: Union[str, list]) -> pd.DataFrame:
     """
     Get uuid and geometry from tile dataframe for lidar table.
     if geometry in tile dataframe is polygon Z (3d: x, y, z), convert it to polygon (2d: x, y).
@@ -212,7 +214,7 @@ def gen_lidar_data(gdf_in: gpd.GeoDataFrame, file_path: str) -> pd.DataFrame:
                                 str(pathlib.Path(file_path).parent.as_posix() + '/'))
         )
     # search all downloaded .laz files in the file_path directory.
-    file_path_list = utils.get_files('.laz', file_path)
+    file_path_list = utils.get_files(file_type, file_path)
     file_name_list = [os.path.basename(p) for p in file_path_list]
     df_downloaded = pd.DataFrame({'file_name': file_name_list,
                                   'file_path': file_path_list})
@@ -261,12 +263,17 @@ def store_tile_to_db(engine: Engine, file_path: str) -> gpd.GeoDataFrame:
     return gdf_to_db
 
 
-def store_lidar_to_db(engine: Engine, file_path: str, gdf: gpd.GeoDataFrame) -> int:
+def store_lidar_to_db(engine: Engine,
+                      file_path: str,
+                      gdf_tile: gpd.GeoDataFrame,
+                      file_type: Union[str, list] = None) -> int:
     """
     To store the path of downloaded point cloud files with geometry annotation.
     gdf: dataframe from tile table.
     """
-    df_to_db = gen_lidar_data(gdf, file_path)
+    if file_type is None:
+        file_type = ['.laz', '.las']
+    df_to_db = gen_lidar_data(gdf_tile, file_path, file_type)
     df_to_db['created_at'] = pd.Timestamp.now().strftime('%Y-%m-%d %X')
     df_to_db = df_to_db[['uuid', 'file_path', 'created_at']]
     create_table(engine, LIDAR)
@@ -277,7 +284,7 @@ def store_lidar_to_db(engine: Engine, file_path: str, gdf: gpd.GeoDataFrame) -> 
 
 def check_file_number(data_path: Union[str, pathlib.Path], expect: int) -> None:
     """ To check .laz file number, which should match the .laz number in lidar table. """
-    file_path_list = utils.get_files('.laz', data_path)
+    file_path_list = utils.get_files(['.laz', '.las'], data_path)
     if len(file_path_list) != expect:
         logger.warning(
             f'Download .laz file number {len(file_path_list)} is different with "lidar" table {expect}.'
@@ -296,7 +303,7 @@ def store_data_to_db(engine: Engine, data_path: Union[str, pathlib.Path]) -> Non
     for directory in os.listdir(data_path):
         start = datetime.now()
         file_path = os.path.join(data_path, directory)
-        if os.path.isdir(file_path) and len(utils.get_files('.laz', file_path)) > 0:
+        if os.path.isdir(file_path) and len(utils.get_files(['.laz', '.las'], file_path)) > 0:
             gdf = store_tile_to_db(engine, file_path)
             count += store_lidar_to_db(engine, file_path, gdf)
         else:
