@@ -31,19 +31,22 @@ supported_drivers['LIBKML'] = 'rw'
 
 def get_extent_geometry(extent_file: str) -> gpd.GeoSeries.values:
     """Get extent geometry from kml file."""
-    if os.path.exists(extent_file):
-        gdf = gpd.read_file(extent_file)
+    gdf = gpd.GeoDataFrame(crs='epsg:2193', geometry=gpd.GeoSeries())
+    file = pathlib.Path(extent_file)
+    file = file.parent / pathlib.Path('NEW__' + str(file.name))
+    if os.path.exists(file):
+        gdf = gpd.read_file(file)
         gdf = gdf.to_crs(2193)
     else:
-        raise ValueError(f'extent file {extent_file} is not exist.')
-    return gdf['geometry'].values
+        logger.warning(f'Extent file {extent_file} is not exist.')
+    return gdf['geometry'].values  # do not use ...values[0] to avoid Error.
 
 
 def search_string(pattern: str, string: str) -> str:
     """Search string by pattern using regex."""
     match = re.search(pattern, string)
     if not match:
-        raise ValueError(f'No target pattern: "{pattern}" found in string: "{string}".')
+        logger.warning(f'No target pattern: "{pattern}" found in string: "{string}".')
     return match.group(1)
 
 
@@ -77,11 +80,16 @@ class ExtraFilesPipeline(FilesPipeline):
         """Rename downloaded files."""
         end_str = request.url.split('=')[-1]
         if end_str == 'xml':
-            file_path = str(pathlib.PurePosixPath(item['meta_path']))
+            directory = pathlib.Path(item['meta_path']).parent
+            name = 'NEW__' + str(pathlib.Path(item['meta_path']).name)
+            file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
         elif end_str == 'true':  # kml url is ended with "download=true"
-            file_path = str(pathlib.PurePosixPath(item['extent_path']))
+            directory = pathlib.Path(item['extent_path']).parent
+            name = 'NEW__' + str(pathlib.Path(item['extent_path']).name)
+            file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
         else:
-            raise ValueError(f'input url {request.url} is not correct.')
+            logger.warning(f'input url {request.url} is not correct.')
+            file_path = None
         return file_path
 
     def item_completed(self, results, item, info):
@@ -89,7 +97,7 @@ class ExtraFilesPipeline(FilesPipeline):
         if item['private']:
             logger.warning(f'Private dataset: {item["name"]} is not saved to database.')
             return item
-        engine = utils.get_database()
+        engine = utils.get_database(null_pool=True)
         create_table(engine, DATASET)
         timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %X')
         data = {'id': '-1',
@@ -227,7 +235,7 @@ class DatasetSpider(CrawlSpider):
         yield item
 
 
-def run() -> None:
+def crawl_dataset() -> None:
     """
     Crawl the data from the website, save in the database,
     and save the metadata and extent files in the local directory.
@@ -254,6 +262,33 @@ def run() -> None:
     except CloseSpider:
         logger.info('Finish crawling datasets from OpenTopography.')
         pass
+
+
+def rename_file():
+    """
+    Change the name of the downloaded files.
+
+    Scrapy does not overwrite the existing files, so the downloaded files
+    will be named to make sure download files are latest for each crawling.
+    """
+    data_dir = pathlib.Path(utils.get_env_variable('DATA_DIR')) / pathlib.Path(utils.get_env_variable('LIDAR_DIR'))
+    list_file = utils.get_files(['.kml', 'xml'], data_dir)
+    count = 0
+    for file in list_file:
+        file = pathlib.Path(file)
+        if file.name.startswith('NEW__'):
+            new_file = file.parent / file.name.replace('NEW__', '')
+            if new_file.exists():
+                new_file.unlink()
+            file.rename(new_file)
+            count += 1
+    logger.info(f'Finish renaming {count} .xml and .kml file.')
+
+
+def run():
+    """Run the module."""
+    crawl_dataset()
+    rename_file()
 
 
 if __name__ == '__main__':
