@@ -10,6 +10,7 @@ import shapely
 import logging
 import os
 import pathlib
+from fnmatch import fnmatch
 import pygeos  # for drop z
 from typing import Type, TypeVar, Union
 from datetime import datetime, timedelta
@@ -164,19 +165,27 @@ def cast_geodataframe(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return gdf
 
 
-def get_files(filetype: str, file_path: str, expect: int = -1) -> Union[list, str]:
+def case_insensitive_rglob(directory: Union[str, pathlib.Path], pattern: str) -> list:
+    """case-insensitive rglob function."""
+    path = pathlib.Path(directory)
+    assert path.is_dir(), f"{path} is not a directory."
+    return [str(file.as_posix()) for file in path.rglob(pattern) if fnmatch(file.name, pattern)]
+
+
+def get_files(suffix: Union[str, list], file_path: Union[str, pathlib.Path], expect: int = -1) -> Union[list, str]:
     """ To get the path of all the files with filetype extension in the input file path. """
-    file_path_list = []
-    for file in pathlib.Path(file_path).rglob(f"*{filetype}"):
-        file_path_list.append(str(file.as_posix()))
-    if expect < 0 or 1 < expect == len(file_path_list):
-        return file_path_list
-    elif expect == 1 and len(file_path_list) == 1:
-        return file_path_list[0]
+    list_file_path = []
+    list_suffix = suffix if isinstance(suffix, list) else [suffix]
+    for _suffix in list_suffix:
+        list_file_path.extend(case_insensitive_rglob(file_path, f'*{_suffix}'))
+    if expect < 0 or 1 < expect == len(list_file_path):
+        if len(list_file_path) == 0:
+            logger.debug(f"No {suffix} file found in {file_path}.")
+        return list_file_path
+    elif expect == 1 and len(list_file_path) == 1:
+        return list_file_path[0]
     else:
-        raise FileNotFoundError(
-            f"Error:: Find {len(file_path_list)} {filetype} files in {file_path}, where expect {expect}."
-        )
+        logger.error(f"Find {len(list_file_path)} {suffix} files in {file_path}, where expect {expect}.")
 
 
 def drop_z(ds: gpd.GeoSeries) -> gpd.GeoSeries:
@@ -280,7 +289,7 @@ def retrieve_dataset(engine: Engine,
 def retrieve_lidar(engine: Engine,
                    boundary_file: Union[str, pathlib.Path],
                    sort_by: str = 'survey_end_date',
-                   buffer: Union[int, float] = 0) -> dict:
+                   buffer: Union[int, float] = 0) -> OrderedDict:
     """
     Read catchment geometry from boundary_file,
     query dataset to get dataset name which intersect with the input geometry,
@@ -308,12 +317,9 @@ def retrieve_lidar(engine: Engine,
         datasets_dict[dataset_name]["file_paths"] = [
             pathlib.PurePosixPath(p) for p in sorted(df['file_path'].to_list())
         ]
-        datasets_dict[dataset_name]["tile_index_file"] = (
-            [pathlib.PurePosixPath(p) for p in tile_path_list if dataset_name in p][0] if not None else None
-        )
-        assert datasets_dict[dataset_name]["tile_index_file"] is not None, (
-            f"{dataset_name} tile index file does not exist."
-        )
+        datasets_dict[dataset_name]["tile_index_file"] = [
+            pathlib.PurePosixPath(p) for p in tile_path_list if dataset_name in p
+        ][0]
         logging.debug(f'Dataset {dataset_name} has '
                       f'{len(datasets_dict[dataset_name]["file_paths"])} lidar files in '
                       f'ROI with buffer distance {buffer} mitre.')
