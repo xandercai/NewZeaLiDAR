@@ -331,6 +331,7 @@ def run(roi_id: Union[int, str, list] = None,
         roi_file: Union[str, pathlib.Path] = r'configs/demo.geojson',
         roi_gdf: gpd.GeoDataFrame = None,
         name_base: bool = False,
+        download_only: bool = False,
         buffer: Union[int, float] = 20) -> None:
     """
     Main function for download lidar data from OpenTopography.
@@ -339,6 +340,7 @@ def run(roi_id: Union[int, str, list] = None,
     :param roi_gdf: region of interest boundary, a geodataframe with geometry column.
     :param roi_file: region of interest boundary file path, support one file only.
     :param name_base: if True, use dataset name retrieved form input to download lidar data.
+    :param download_only: if True, only download lidar data, not store to database.
     :param buffer: buffer distance for roi_gdf.
     """
     engine = utils.get_database()
@@ -371,7 +373,8 @@ def run(roi_id: Union[int, str, list] = None,
             get_lidar_data(data_path, gdf=roi_gdf)
         else:
             raise ValueError(f"Input parameters are not correct.")
-    store_data_to_db(engine, data_path)
+    if not download_only:
+        store_data_to_db(engine, data_path)
     engine.dispose()
     gc.collect()
 
