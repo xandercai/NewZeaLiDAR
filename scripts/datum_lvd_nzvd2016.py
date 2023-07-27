@@ -105,7 +105,8 @@ for (path, _, files) in os.walk(src_dir):
                            pipeline, src_file, dest_file, horizontal_srs, gtxfile)
 
         if pdal_cmd != '':
-            pdal_cmd_list.append(pdal_cmd)
+            single_pdal_cmd_list = [pdal_cmd, 'shell=True']
+            pdal_cmd_list.append(single_pdal_cmd_list)
 
 print(f'Tranfering datum for {len(pdal_cmd_list)} lidar files...')
 
