@@ -56,6 +56,8 @@ else:
 # pipeline files
 pipeline_las = r'./NewZeaLiDAR/configs/pipeline_las.json'
 pipeline_xyz = r'./NewZeaLiDAR/configs/pipeline_xyz.json'
+assert os.path.exists(pipeline_las), 'pipeline_las.json not found!'
+assert os.path.exists(pipeline_xyz), 'pipeline_xyz.json not found!'
 horizontal_srs = 'EPSG:2193'
 
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir):
@@ -69,6 +71,7 @@ pdal_cmd_list = []
 for (path, _, files) in os.walk(src_dir):
     for file in files:
         src_file = str(pathlib.Path(path) / pathlib.Path(file))
+        assert os.path.exists(src_file), f'{src_file} not found!'
         pdal_cmd = ''
 
         if file.lower().endswith('.las'):
@@ -78,7 +81,7 @@ for (path, _, files) in os.walk(src_dir):
             if '.LAS' in file:
                 file = file.replace('.LAS', '.laz')
             dest_file = str(dest_dir / pathlib.Path(file))
-            # print(f'Re-projecting {file} with {pipeline} and {gtxfile}...')
+            print(f'Re-projecting {file} with {pipeline} and {gtxfile}...')
             pdal_cmd = 'pdal pipeline {} ' \
                        '--readers.las.filename={} ' \
                        '--writers.las.filename={} ' \
