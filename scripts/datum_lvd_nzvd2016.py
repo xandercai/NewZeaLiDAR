@@ -40,7 +40,7 @@ if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir):
     laz_files = [f for f in src_dir.glob('*.laz')]
     print(f'Changing {len(laz_files)} .laz files to .las...')
     for f in laz_files:
-        f.rename(src_dir / f.stem / '.las')
+        f.rename(src_dir / pathlib.Path(f.stem + '.las'))
 
 # gtx file source: https://github.com/linz/proj-datumgrid-nz
 # git clone https://github.com/linz/proj-datumgrid-nz.git
