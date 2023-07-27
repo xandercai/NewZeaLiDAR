@@ -109,6 +109,7 @@ for (path, _, files) in os.walk(src_dir):
             pdal_cmd_list.append(single_pdal_cmd_list)
 
 print(f'Tranfering datum for {len(pdal_cmd_list)} lidar files...')
+print(pdal_cmd_list)
 
 with ThreadPool(mp.cpu_count()) as pool:
     pool.map(subprocess.run, pdal_cmd_list)
