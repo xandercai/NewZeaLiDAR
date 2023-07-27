@@ -21,6 +21,7 @@
       "level": "DEBUG",
       "formatter": "standard",
       "filename": "logs/info.log",
+      "comment": "do not forget to create the logs directory",
       "maxBytes": 10485760,
       "backupCount": 20,
       "encoding": "utf8"
@@ -31,6 +32,7 @@
       "level": "ERROR",
       "formatter": "standard",
       "filename": "logs/errors.log",
+      "comment": "do not forget to create the logs directory",
       "maxBytes": 10485760,
       "backupCount": 20,
       "encoding": "utf8"
