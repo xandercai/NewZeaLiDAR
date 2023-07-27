@@ -15,20 +15,20 @@ from multiprocessing.pool import ThreadPool
 # print('Work dir: ', pathlib.Path.cwd())
 path_list = [
     # not support space in path, need modify directory name from 'Processed Point Cloud' to 'Processed_Point_Cloud'
-    r'../datastorage/lidar/NZ10_WHope',
-    r'../datastorage/lidar/',
-    r'../datastorage/lidar_waikato/LiDAR_2014_Hipaua_Thermal_Area/Moturiki1953/Processed_Point_Cloud',
-    r'../datastorage/lidar_waikato/LiDAR_2012_2013_Coromandel/Auckland_1946/Processed_Point_Cloud',
-    r'../datastorage/lidar_waikato/LiDAR_2010_2011/Northern_Waikato/Processed_Point_Cloud/Moturiki_1953',
-    r'../datastorage/lidar_waikato/LiDAR_2010_2011/Raglan_Harbour/Processed_Point_Cloud/Moturiki_1953',
-    r'../datastorage/lidar_waikato/LiDAR_2007_2008/Area_1/XYZI/ground',
-    r'../datastorage/lidar_waikato/LiDAR_2007_2008/Area_1_Option_B/XYZI/ground',
-    r'../datastorage/lidar_waikato/LiDAR_2007_2008/Area_2/XYZI/ground',
-    r'../datastorage/lidar_waikato/LiDAR_2007_2008/Area_3/XYZI/ground',
-    r'../datastorage/lidar_waikato/LiDAR_2007_2008/Area_4/XYZI/ground',
-    r'../datastorage/lidar_waikato/LiDAR_2007_2008/Area_5/XYZI/ground',
-    r'../datastorage/lidar_waikato/LiDAR_2007_2008/Area_6/XYZI/ground',
-    r'../datastorage/lidar_waikato/LiDAR_2006_Lake_Taupo/Moturiki_1953/ground',
+    r'./datastorage/lidar/NZ10_WHope',
+    r'./datastorage/lidar/NZ10_CAlpine',
+    r'./datastorage/lidar_waikato/LiDAR_2014_Hipaua_Thermal_Area/Moturiki1953/Processed_Point_Cloud',
+    r'./datastorage/lidar_waikato/LiDAR_2012_2013_Coromandel/Auckland_1946/Processed_Point_Cloud',
+    r'./datastorage/lidar_waikato/LiDAR_2010_2011/Northern_Waikato/Processed_Point_Cloud/Moturiki_1953',
+    r'./datastorage/lidar_waikato/LiDAR_2010_2011/Raglan_Harbour/Processed_Point_Cloud/Moturiki_1953',
+    r'./datastorage/lidar_waikato/LiDAR_2007_2008/Area_1/XYZI/ground',
+    r'./datastorage/lidar_waikato/LiDAR_2007_2008/Area_1_Option_B/XYZI/ground',
+    r'./datastorage/lidar_waikato/LiDAR_2007_2008/Area_2/XYZI/ground',
+    r'./datastorage/lidar_waikato/LiDAR_2007_2008/Area_3/XYZI/ground',
+    r'./datastorage/lidar_waikato/LiDAR_2007_2008/Area_4/XYZI/ground',
+    r'./datastorage/lidar_waikato/LiDAR_2007_2008/Area_5/XYZI/ground',
+    r'./datastorage/lidar_waikato/LiDAR_2007_2008/Area_6/XYZI/ground',
+    r'./datastorage/lidar_waikato/LiDAR_2006_Lake_Taupo/Moturiki_1953/ground',
 ]
 assert int(sys.argv[1]) < len(path_list), 'Input Index out of range!'
 src_dir = pathlib.Path(path_list[int(sys.argv[1])])
@@ -43,6 +43,7 @@ if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir):
         f.rename(src_dir / f.stem / '.las')
 
 # gtx file source: https://github.com/linz/proj-datumgrid-nz
+# git clone https://github.com/linz/proj-datumgrid-nz.git
 gtxfile_Moturiki_1953 = r'../proj-datumgrid-nz/files/moturiki_1953.gtx'
 gtxfile_Auckland_1946 = r'../proj-datumgrid-nz/files/auckht1946-nzvd2016.gtx'
 gtxfile_Lyttleton_1937 = r'../proj-datumgrid-nz/files/lyttht1937-nzvd2016.gtx'
