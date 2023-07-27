@@ -55,8 +55,8 @@ else:
     gtxfile = gtxfile_Moturiki_1953
 
 # pipeline files
-pipeline_las = r'configs/pipeline_las.json'
-pipeline_xyz = r'configs/pipeline_xyz.json'
+pipeline_las = r'NewZeaLiDAR/configs/pipeline_las.json'
+pipeline_xyz = r'NewZeaLiDAR/configs/pipeline_xyz.json'
 horizontal_srs = 'EPSG:2193'
 
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir):
