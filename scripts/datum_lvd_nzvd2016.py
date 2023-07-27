@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # usage: in prompt of conda environment containing pdal, set correct paths, run the script. e.g.:
-#        > conda activate newzealidar
-#        > cd NewZealandLiDAR
-#        > python scripts/datum_lvd_nzvd2016.py 3  # 3 is the index of path_list
+#        > conda activate lidar  # or in the sandbox-newzealidar
+#        > python NewZeaLiDAR/scripts/datum_lvd_nzvd2016.py 3  # 3 is the index of path_list
 
 import os
 import sys
@@ -44,9 +43,9 @@ if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir):
 
 # gtx file source: https://github.com/linz/proj-datumgrid-nz
 # git clone https://github.com/linz/proj-datumgrid-nz.git
-gtxfile_Moturiki_1953 = r'../proj-datumgrid-nz/files/moturiki_1953.gtx'
-gtxfile_Auckland_1946 = r'../proj-datumgrid-nz/files/auckht1946-nzvd2016.gtx'
-gtxfile_Lyttleton_1937 = r'../proj-datumgrid-nz/files/lyttht1937-nzvd2016.gtx'
+gtxfile_Moturiki_1953 = r'./proj-datumgrid-nz/files/moturiki_1953.gtx'
+gtxfile_Auckland_1946 = r'./proj-datumgrid-nz/files/auckht1946-nzvd2016.gtx'
+gtxfile_Lyttleton_1937 = r'./proj-datumgrid-nz/files/lyttht1937-nzvd2016.gtx'
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir):
     gtxfile = gtxfile_Lyttleton_1937
 elif 'Auckland_1946' in str(src_dir):
@@ -55,8 +54,8 @@ else:
     gtxfile = gtxfile_Moturiki_1953
 
 # pipeline files
-pipeline_las = r'NewZeaLiDAR/configs/pipeline_las.json'
-pipeline_xyz = r'NewZeaLiDAR/configs/pipeline_xyz.json'
+pipeline_las = r'./NewZeaLiDAR/configs/pipeline_las.json'
+pipeline_xyz = r'./NewZeaLiDAR/configs/pipeline_xyz.json'
 horizontal_srs = 'EPSG:2193'
 
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir):
