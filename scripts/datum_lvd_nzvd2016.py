@@ -114,7 +114,7 @@ for (path, _, files) in os.walk(src_dir):
 print(f'Transferring datum for {len(pdal_cmd_list)} lidar files...')
 
 with ThreadPool(mp.cpu_count()) as pool:
-    pool.map(partial(subprocess.run, shell=True, check=True, text=True, capture_output=True), pdal_cmd_list)
+    pool.map(partial(subprocess.run, shell=True, text=True, capture_output=True), pdal_cmd_list)
 
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir) or 'NZ10_Wellington' in str(src_dir):
     las_files = [f for f in src_dir.glob('*.las')]
