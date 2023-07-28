@@ -2,11 +2,11 @@
 # usage: in prompt of conda environment containing pdal, set correct paths, run the script. e.g.:
 #        > conda activate lidar
 #        > python NewZeaLiDAR/scripts/datum_lvd_nzvd2016.py 3  # 3 is the index of path_list
-# only support Windows PowerShell.
 
 import os
 import sys
 import pathlib
+from functools import partial
 import subprocess
 import multiprocessing as mp
 from multiprocessing.pool import ThreadPool
@@ -37,7 +37,7 @@ print('Transforming datum from LVD to NZVD2016 in dir:\n', src_dir)
 
 # for Lyttleton_1937: NZ10_WHope NZ10_CAlpine, Wellht_1953: NZ10_Wellington
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir) or 'NZ10_Wellington' in str(src_dir):
-    # change .laz file suffix to .las
+    # change .laz file suffix to .las. PDAL treat .laz as .las, so it is alright to change suffix
     laz_files = [f for f in src_dir.glob('*.laz')]
     for f in laz_files:
         f.rename(src_dir / pathlib.Path(f.stem + '.las'))
@@ -111,10 +111,10 @@ for (path, _, files) in os.walk(src_dir):
         if pdal_cmd != '':
             pdal_cmd_list.append(pdal_cmd)
 
-print(f'Tranfering datum for {len(pdal_cmd_list)} lidar files...')
+print(f'Transferring datum for {len(pdal_cmd_list)} lidar files...')
 
 with ThreadPool(mp.cpu_count()) as pool:
-    pool.map(subprocess.run, pdal_cmd_list)
+    pool.map(partial(subprocess.run, shell=True, check=True, text=True, capture_output=True), pdal_cmd_list)
 
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir) or 'NZ10_Wellington' in str(src_dir):
     las_files = [f for f in src_dir.glob('*.las')]
@@ -124,5 +124,8 @@ if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir) or 'NZ10_Welli
     for f in laz_file:
         f.rename(src_dir / pathlib.Path(f.name))
     dest_dir.rmdir()
+
+with open(src_dir / 'datum.log', 'w') as file:
+    file.write('\n'.join(pdal_cmd_list))
 
 print('Done!')
