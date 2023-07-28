@@ -114,15 +114,23 @@ for (path, _, files) in os.walk(src_dir):
 print(f'Transferring datum for {len(pdal_cmd_list)} lidar files...')
 
 with ThreadPool(mp.cpu_count()) as pool:
-    pool.map(partial(subprocess.run, shell=True, text=True, capture_output=True), pdal_cmd_list)
+    pool.map(partial(subprocess.run, shell=True, check=True, text=True, capture_output=True), pdal_cmd_list)
 
 if 'NZ10_WHope' in str(src_dir) or 'NZ10_CAlpine' in str(src_dir) or 'NZ10_Wellington' in str(src_dir):
+    laz_files = [f for f in dest_dir.glob('*.laz')]
     las_files = [f for f in src_dir.glob('*.las')]
+    if len(laz_files) != len(pdal_cmd_list):
+        # if no file transferred successfully, recover the original file name
+        if len(laz_files) == 0:
+            for f in las_files:
+                f.rename(src_dir / pathlib.Path(f.stem + '.laz'))
+        raise Exception('Number of laz files not equal to number of pdal commands!')
+    # move laz files to src_dir
+    for f in laz_files:
+        f.rename(src_dir / pathlib.Path(f.name))
+    # delete las files
     for f in las_files:
         f.unlink()
-    laz_file = [f for f in dest_dir.glob('*.laz')]
-    for f in laz_file:
-        f.rename(src_dir / pathlib.Path(f.name))
     dest_dir.rmdir()
 
 with open(src_dir / 'datum.log', 'w') as file:
