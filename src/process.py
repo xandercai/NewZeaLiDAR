@@ -19,7 +19,6 @@ from datetime import datetime, timedelta
 from typing import Union, Type
 import geopandas as gpd
 import pandas as pd
-from collections import OrderedDict
 from sqlalchemy.engine import Engine
 
 from src import utils
@@ -42,7 +41,7 @@ logger = logging.getLogger(__name__)
 # print("DASK_DISTRIBUTED__ADMIN__TICK__LIMIT = ", os.environ["DASK_DISTRIBUTED__ADMIN__TICK__LIMIT"])
 
 
-def save_instructions(instructions: OrderedDict, instructions_path: str) -> None:
+def save_instructions(instructions: dict, instructions_path: str) -> None:
     """save instructions to json file."""
 
     def _recursive_str(d):
@@ -61,10 +60,10 @@ def save_instructions(instructions: OrderedDict, instructions_path: str) -> None
 
 
 def gen_instructions(engine: Engine,
-                     instructions: OrderedDict,
+                     instructions: dict,
                      index: int,
                      mode: str = 'api',
-                     buffer: Union[int, float] = 0) -> OrderedDict:
+                     buffer: Union[int, float] = 0) -> dict:
     """Read basic instruction file and adds keys and uses geojson as catchment_boundary"""
     instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
     data_dir = pathlib.PurePosixPath(utils.get_env_variable("DATA_DIR"))
@@ -72,7 +71,7 @@ def gen_instructions(engine: Engine,
     index_dir = pathlib.PurePosixPath(str(index))
     subfolder = pathlib.PurePosixPath(dem_dir / index_dir)
     if instructions["instructions"].get("data_paths") is None:
-        instructions["instructions"]["data_paths"] = OrderedDict()
+        instructions["instructions"]["data_paths"] = {}
     instructions["instructions"]["data_paths"]["local_cache"] = str(data_dir)
     instructions["instructions"]["data_paths"]["subfolder"] = str(subfolder)
     instructions["instructions"]["data_paths"]["downloads"] = str(data_dir)
@@ -88,11 +87,11 @@ def gen_instructions(engine: Engine,
     catchment_boundary_file = str(pathlib.PurePosixPath(data_dir / subfolder / pathlib.Path(f'{index}.geojson')))
 
     if instructions["instructions"].get("datasets") is None:
-        instructions["instructions"]["datasets"] = OrderedDict({"lidar": {}})
+        instructions["instructions"]["datasets"] = {"lidar": {}}
     if mode == 'api':
         if instructions["instructions"]["data_paths"].get("land") is None:
             if instructions["instructions"]["datasets"].get("vector") is None:
-                instructions["instructions"]["datasets"]["vector"] = OrderedDict({"linz": {}})
+                instructions["instructions"]["datasets"]["vector"] = {"linz": {}}
             instructions["instructions"]["datasets"]["vector"]["linz"]["key"] = utils.get_env_variable("LINZ_API_KEY")
             instructions["instructions"]["datasets"]["vector"]["linz"]["land"] = {"layers": [51153]}
         instructions["instructions"]["datasets"]["lidar"]["open_topography"] = (
@@ -125,10 +124,10 @@ def gen_dem(instructions) -> None:
 
 
 def single_process(engine: Engine,
-                   instructions: OrderedDict,
+                   instructions: dict,
                    index: int,
                    mode: str = 'api',
-                   buffer: Union[int, float] = 0) -> Union[OrderedDict, None]:
+                   buffer: Union[int, float] = 0) -> Union[dict, None]:
     """the gen_dem process in a single row of geodataframe"""
     logger.info(f'*** Processing {index} in {mode} mode with geometry buffer {buffer} ...')
     single_instructions = gen_instructions(engine, instructions, index, mode=mode, buffer=buffer)
@@ -150,7 +149,7 @@ def single_process(engine: Engine,
     return single_instructions
 
 
-def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: OrderedDict) -> None:
+def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: dict) -> None:
     """save hydrological conditioned dem to database in hydro table."""
     assert len(instructions) > 0, 'instructions is empty dictionary.'
     index = os.path.basename(instructions["instructions"]["data_paths"]["subfolder"])
@@ -210,8 +209,9 @@ def run(catch_id: Union[int, str, list] = None,
         gpkg: bool = True) -> None:
     """
     Main function for generate hydrological conditioned dem of catchments.
-    :param catch_id: the id of target catchments, if id is negative, get all catchments in the catchment table.
+    :param catch_id: the id of target catchments.
     :param area: the upper limit area of target catchments.
+        if both catch_id and area are none, get all catchments in the catchment table
     :param mode: 'api' or 'local', default is 'api'.
         If mode is 'api', the lidar data will be downloaded from open topography.
         If mode is 'local', the lidar data will be downloaded from local directory.
@@ -225,55 +225,44 @@ def run(catch_id: Union[int, str, list] = None,
     dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
     catch_path = data_dir / dem_dir
     instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
-    with open(instructions_file, 'r') as f:
-        instructions = json.loads(f.read(), object_pairs_hook=OrderedDict)
-
     # generate dataset mapping info
     utils.map_dataset_name(engine, instructions_file)
-
-    # note the priority of catch_id > area limit
-    if catch_id is not None:
-        if isinstance(catch_id, int) and catch_id > 0:
-            catch_id = [catch_id]
-        if isinstance(catch_id, str):
-            assert catch_id.isdigit(), 'catch_id must be integer.'
-            catch_id = [catch_id]
+    with open(instructions_file, 'r') as f:
+        instructions = json.loads(f.read())
 
     if catch_id is not None:
-        logger.debug(f'Check catch_id: {catch_id} validation.')
         if isinstance(catch_id, str):
-            assert catch_id.isdigit(), 'Input catch_id must be integer.'
-        if isinstance(catch_id, int) and catch_id <= 0:
-            _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
-            catch_id = sorted(_gdf['catch_id'].to_list())
-            logger.info(f'******* FULL CATCHMENTS MODE *********\nThere are {len(catch_id)} Catchments in total.')
-        else:
-            catch_id = [catch_id] if isinstance(catch_id, (int, str)) else catch_id
-            _gdf = pd.read_sql(f"SELECT catch_id FROM {SDC.__tablename__} ;", engine)
-            sdc_id = sorted(_gdf['catch_id'].to_list())
-            _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
-            catchment_id = sorted(_gdf['catch_id'].to_list())
-            new_id = []
-            for i in catch_id:
-                if i in catchment_id:  # small catchment
-                    new_id.append(i)
-                elif i in sdc_id and i not in catchment_id:  # large catchment, search subordinates
-                    _list = get_split_catchment_by_id(engine, i, sub=True)
-                    if len(_list) > 0:
-                        new_id.extend(_list)
-                        logger.debug(f'Catchment {i} split to {len(_list)} subordinates {_list}.')
-                    else:
-                        logger.warning(f'Catchment {i} is not in `catchment` table, '
-                                       f'please check if it is duplicated or overlap with other catchments.')
+            assert catch_id.isdigit(), 'Input catch_id must be integer string.'
+        if isinstance(catch_id, int):
+            assert catch_id > 0, 'Input catch_id must be positive integer.'
+        catch_id = catch_id if isinstance(catch_id, list) else [catch_id]
+        _gdf = pd.read_sql(f"SELECT catch_id FROM {SDC.__tablename__} ;", engine)
+        sdc_id = sorted(_gdf['catch_id'].to_list())
+        _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
+        catchment_id = sorted(_gdf['catch_id'].to_list())
+        new_id = []
+        for i in catch_id:
+            if i in catchment_id:  # small catchment
+                new_id.append(i)
+            elif i in sdc_id and i not in catchment_id:  # large catchment, search subordinates
+                _list = get_split_catchment_by_id(engine, i, sub=True)
+                if len(_list) > 0:
+                    new_id.extend(_list)
+                    logger.debug(f'Catchment {i} split to {len(_list)} subordinates {_list}.')
                 else:
-                    logger.warning(f'Catchment {i} is not in catchment table, ignore it.')
-            catch_id = new_id
+                    logger.warning(f'Catchment {i} is not in `catchment` table, '
+                                   f'please check if it is duplicated or overlap with other catchments.')
+            else:
+                logger.warning(f'Catchment {i} is not in catchment table, ignore it.')
+        catch_id = new_id
         logger.debug(f'check catch_id: pass.')
     elif area is not None:
         catch_id = get_id_under_area(engine, SDC, area)
         logger.info(f'There are {len(catch_id)} Catchments that area is under {area} m2')
     else:
-        raise ValueError('Please provide catch_id or area_limit.')
+        _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
+        catch_id = sorted(_gdf['catch_id'].to_list())
+        logger.info(f'******* FULL CATCHMENTS MODE *********\nCalculating {len(catch_id)} Catchments DEM in total.')
 
     # generate catchment boundary geodataframe
     gpkg_dir = pathlib.Path(utils.get_env_variable('DATA_DIR')) / pathlib.Path('GPKG')
