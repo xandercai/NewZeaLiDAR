@@ -10,6 +10,7 @@ import pathlib
 import re
 import time
 from datetime import datetime
+from shapely.geometry import Polygon
 
 import geopandas as gpd
 import pandas as pd
@@ -29,17 +30,32 @@ logger = logging.getLogger(__name__)
 supported_drivers['LIBKML'] = 'rw'
 
 
-def get_extent_geometry(extent_file: str) -> gpd.GeoSeries.values:
+def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
     """Get extent geometry from kml file."""
-    gdf = gpd.GeoDataFrame(crs='epsg:2193', geometry=gpd.GeoSeries())
-    file = pathlib.Path(extent_file)
+    file = pathlib.Path(item['extent_path'])
     file = file.parent / pathlib.Path('tmp_datasets__' + str(file.name))
     if os.path.exists(file):
         gdf = gpd.read_file(file)
         gdf = gdf.to_crs(2193)
     else:
-        logger.warning(f'Extent file {extent_file} is not exist.')
-    return gdf['geometry'].values  # do not use ...values[0] to avoid Error.
+        # if the dataset does not provide the extent file, use the tile index file to get the extent.
+        # do not suggest to use this method, because read and transform tile index file to geometry is slow.
+        # the tile index file will not exist if lidar.py does not download the tile index file.
+        if os.path.exists(item['tile_path']):
+            logger.warning(f'Extent file {file} is not exist, will use tile index geometry to generate dataset extent.')
+            gdf = gpd.GeoDataFrame.from_file('zip://' + str(item['tile_path']))
+            assert not gdf.empty, f'Tile index file {item["tile_path"]} is empty.'
+            assert '2193' in str(gdf.crs), f'Tile index file {item["tile_path"]} is not epsg:2193.'
+            # get the extent of the dataset
+            geom = gdf['geometry'].unary_union
+            # remove gaps
+            geom = geom.buffer(2, join_style='mitre').buffer(-2, join_style='mitre')
+            gdf = gpd.GeoDataFrame(index=[0], crs='epsg:2193', geometry=[geom])
+        else:
+            logger.warning(f'Extent file {file} and tile index file {item["tile_path"]} are not exist, '
+                           f'use empty geometry.')
+            gdf = gpd.GeoDataFrame(index=[0], crs='epsg:2193', geometry=[Polygon()])
+    return gdf['geometry'].values[0]
 
 
 def search_string(pattern: str, string: str) -> str:
@@ -116,10 +132,10 @@ class ExtraFilesPipeline(FilesPipeline):
                 'extent_path': item['extent_path'],
                 # 'extent_source': item['file_urls'][1],
                 'tile_path': item['tile_path'],
-                'geometry': get_extent_geometry(item['extent_path']),
+                'geometry': [get_extent_geometry(item)],
                 'created_at': timestamp,
                 'updated_at': timestamp}
-        gdf_to_db = gpd.GeoDataFrame(data)
+        gdf_to_db = gpd.GeoDataFrame(data, crs='epsg:2193', geometry='geometry')
         query = f"""SELECT * FROM {DATASET.__tablename__} WHERE name = '{item["name"]}' ;"""
         gdf_from_db = gpd.read_postgis(query, engine, geom_col='geometry')
         if gdf_from_db.empty:
