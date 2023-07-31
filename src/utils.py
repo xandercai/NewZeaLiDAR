@@ -226,7 +226,8 @@ def gen_boundary_file(data_path: Union[str, pathlib.Path],
 
 
 def map_dataset_name(engine: Engine, instructions_file: Union[str, pathlib.Path]) -> None:
-    """Mapping dataset name with its id in the database, and save in a json file."""
+    """Mapping dataset name with its ordered id by publication date (and so on), and save in a json file."""
+    logger.info("Mapping dataset name with its ordered id by publication date (and so on).")
     query = f"SELECT name, survey_end_date, publication_date FROM dataset ;"
     df = pd.read_sql(query, engine)
     # latest dataset first, if same then by name
@@ -251,6 +252,25 @@ def get_geometry_by_file(boundary_file: Union[str, pathlib.Path], buffer: Union[
     gdf['buffered'] = gdf['geometry'].buffer(buffer, join_style='mitre')
     return (gdf['geometry'].buffer(buffer, join_style='mitre').values[0]
             if buffer != 0 else gdf['geometry'].values[0])
+
+
+def get_geometry_from_db(engine: Engine,
+                         table: Union[str, Type[Ttable]],
+                         column: Union[str, int],
+                         value: Union[str, int],
+                         buffer: Union[int, float] = 0) -> shapely.geometry:
+    """
+    return the buffered geometry by column value of table (catch_id, name, etc.).
+    """
+    if not isinstance(table, str):
+        table = table.__tablename__
+    query = f"SELECT {column}, geometry FROM {table} WHERE {column} = '{value}';"
+    gdf = gpd.read_postgis(query, engine, crs='epsg:2193', geom_col='geometry')
+    if gdf.empty:
+        logger.error(f"Cannot find {column} = {value} in {table}.")
+        return Polygon()
+    geom = gdf['geometry'].unary_union
+    return geom.buffer(buffer, join_style='mitre') if buffer != 0 else geom
 
 
 def retrieve_dataset(engine: Engine,
@@ -339,9 +359,9 @@ def retrieve_lidar(engine: Engine,
 
 def retrieve_catchment(engine: Engine, boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0) -> list:
     """
-    Read boundary geometry boundary_file,
-    Query dataset to get catch_id which covers the geometry based on the boundary geometry,
-    To safeguard the data/tile integrity, the geometry is buffered by resolution * buffer_factor, no buffer by default.
+    read boundary geometry boundary_file,
+    query dataset to get catch_id which covers the geometry based on the boundary geometry,
+    to safeguard the data/tile integrity, the geometry is buffered by resolution * buffer_factor, no buffer by default.
 
     :param engine: sqlalchemy engine
     :param boundary_file: boundary file path, geojson format. see demo example in 'configs' directory.
