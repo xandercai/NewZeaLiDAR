@@ -225,15 +225,17 @@ def gen_boundary_file(data_path: Union[str, pathlib.Path],
     logging.info(f"Generate region of interest geojson file at {file_path}.")
 
 
-def map_dataset_name_with_id(engine: Engine, table: str, instructions_file: Union[str, pathlib.Path]) -> None:
+def map_dataset_name(engine: Engine, instructions_file: Union[str, pathlib.Path]) -> None:
     """Mapping dataset name with its id in the database, and save in a json file."""
-    query = f"SELECT name, id FROM {table} ;"
-    df = pd.read_sql(query, engine).sort_values(by='id')
+    query = f"SELECT name, survey_end_date, publication_date FROM dataset ;"
+    df = pd.read_sql(query, engine)
+    # latest dataset first, if same then by name
+    df = df.sort_values(by=['publication_date', 'survey_end_date', 'name'], ascending=False).reset_index(drop=True)
     with open(instructions_file, 'r') as f:
         instructions = json.load(f)
-        if instructions["instructions"].get("dataset_mapping"):
+        if not instructions["instructions"].get("dataset_mapping"):
             instructions["instructions"]["dataset_mapping"] = {"lidar": {}}
-        instructions["instructions"]["dataset_mapping"]["lidar"] = dict(zip(df['name'], df['id']))
+        instructions["instructions"]["dataset_mapping"]["lidar"] = dict(zip(df['name'], df.index))
         instructions["instructions"]["dataset_mapping"]["lidar"]["Unknown"] = 0
     with open(instructions_file, 'w') as f:
         json.dump(instructions, f, indent=2)
