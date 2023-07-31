@@ -229,7 +229,7 @@ def run(catch_id: Union[int, str, list] = None,
         instructions = json.loads(f.read(), object_pairs_hook=OrderedDict)
 
     # generate dataset mapping info
-    utils.map_dataset_name_with_id(engine, 'dataset', instructions_file)
+    utils.map_dataset_name(engine, instructions_file)
 
     # note the priority of catch_id > area limit
     if catch_id is not None:
