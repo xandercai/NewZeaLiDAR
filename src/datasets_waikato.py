@@ -54,9 +54,10 @@ def store_dataset_to_db(engine: Engine,
     dataset_dict['survey_end_date'] = [datetime.strptime(d, '%d/%m/%Y').strftime('%Y-%m-%d')
                                        for d in dataset_dict['survey_end_date']]
     dataset_dict['survey_start_date'] = dataset_dict['survey_end_date']
+    dataset_dict['publication_date'] = dataset_dict['survey_end_date']
     df = pd.DataFrame(dataset_dict)
     gdf_to_db = gdf.merge(df, on=['id'], how='right')
-    gdf_to_db = gdf_to_db[['name', 'survey_start_date', 'survey_end_date',
+    gdf_to_db = gdf_to_db[['name', 'survey_start_date', 'survey_end_date', 'publication_date',
                            'original_datum', 'meta_source', 'geometry']]
     gdf_to_db['extent_path'] = ''
     gdf_to_db['tile_path'] = ''
@@ -70,6 +71,7 @@ def store_dataset_to_db(engine: Engine,
     timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %X')
     gdf_to_db['updated_at'] = timestamp
     create_table(engine, DATASET)
+    # suppose always len(gdf_to_db) > 1, if len(gdf_to_db) == 1, the query is not correct.
     query = f"""SELECT id, name, created_at FROM {DATASET.__tablename__}
                 WHERE name in {repr(tuple(map(str, gdf_to_db['name'].to_list())))} ;"""
     df_from_db = pd.read_sql(query, engine)
@@ -88,6 +90,7 @@ def store_dataset_to_db(engine: Engine,
                            'name',
                            'survey_start_date',
                            'survey_end_date',
+                           'publication_date',
                            'original_datum',
                            'meta_source',
                            'extent_path',
