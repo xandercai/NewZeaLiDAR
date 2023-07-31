@@ -242,7 +242,8 @@ def map_dataset_name(engine: Engine, instructions_file: Union[str, pathlib.Path]
         json.dump(instructions, f, indent=2)
 
 
-def get_geometry_by_file(boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0) -> shapely.geometry:
+def get_geometry_from_file(boundary_file: Union[str, pathlib.Path],
+                           buffer: Union[int, float] = 0) -> shapely.geometry:
     """
     Read boundary geometry boundary_file, and return the buffered geometry.
     """
@@ -295,7 +296,7 @@ def retrieve_dataset(engine: Engine,
         geometry = (boundary_df['geometry'].values[0].buffer(buffer, join_style='mitre')
                     if buffer != 0 else boundary_df['geometry'].values[0])
     elif boundary_file is not None:
-        geometry = get_geometry_by_file(boundary_file, buffer=buffer)
+        geometry = get_geometry_from_file(boundary_file, buffer=buffer)
     else:
         raise ValueError("Either boundary_df or boundary_file must be provided.")
     query = f"""SELECT name, {sort_by}, tile_path, geometry FROM dataset
@@ -367,7 +368,7 @@ def retrieve_catchment(engine: Engine, boundary_file: Union[str, pathlib.Path], 
     :param boundary_file: boundary file path, geojson format. see demo example in 'configs' directory.
     :param buffer: buffer factor for the boundary geometry, default is 0.
     """
-    geometry = get_geometry_by_file(boundary_file, buffer=buffer)
+    geometry = get_geometry_from_file(boundary_file, buffer=buffer)
     query = f"""SELECT catch_id, geometry FROM catchment
                 WHERE ST_Intersects(geometry, ST_SetSRID('{geometry}'::geometry, 2193)) ;"""
     gdf = gpd.read_postgis(query, engine, geom_col='geometry')
@@ -639,7 +640,7 @@ def get_netcdf_in_polygon(engine,
     # xds = xr.combine_by_coords(list_xds)
     xds = xds.rio.write_crs(2193)
     print(xds)
-    geometry = get_geometry_by_file(boundary_file, buffer=buffer)
+    geometry = get_geometry_from_file(boundary_file, buffer=buffer)
     xds_clipped = xds.rio.clip([geometry])
     print(xds_clipped)
 
