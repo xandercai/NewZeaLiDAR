@@ -47,19 +47,19 @@
 
     "distributed": {
       "level": "WARNING",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
     "distributed.client": {
       "level": "WARNING",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
     "distributed.worker": {
       "level": "CRITICAL",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
@@ -83,25 +83,25 @@
 
     "src.datasets": {
       "level": "INFO",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
     "src.datasets_waikato": {
       "level": "INFO",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
     "src.lidar": {
       "level": "INFO",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
     "src.lidar_waikato": {
       "level": "INFO",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
@@ -113,13 +113,13 @@
 
     "src.tables": {
       "level": "INFO",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     },
 
     "src.utils": {
       "level": "INFO",
-      "handlers": ["console"],
+      "handlers": ["console", "info_file_handler", "error_file_handler"],
       "propagate": false
     }
 
