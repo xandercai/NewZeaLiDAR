@@ -37,7 +37,7 @@ def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
     if os.path.exists(file):
         gdf = gpd.read_file(file)
         gdf = gdf.to_crs(2193)
-    else:
+    else:  # even file not exists, do not change item['extent_path'] to empty
         # if the dataset does not provide the extent file, use the tile index file to get the extent.
         # do not suggest to use this method, because read and transform tile index file to geometry is slow.
         # the tile index file will not exist if lidar.py does not download the tile index file.
@@ -51,8 +51,8 @@ def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
             # remove gaps
             geom = geom.buffer(2, join_style='mitre').buffer(-2, join_style='mitre')
             gdf = gpd.GeoDataFrame(index=[0], crs='epsg:2193', geometry=[geom])
-        else:
-            logger.warning(f'Extent file {file} and tile index file {item["tile_path"]} are not exist, '
+        else:  # even file not exists, do not change item['tile_path'] to empty
+            logger.warning(f'Extent file {file} and tile index file {item["tile_path"]} are not available, '
                            f'use empty geometry.')
             gdf = gpd.GeoDataFrame(index=[0], crs='epsg:2193', geometry=[Polygon()])
     return gdf['geometry'].values[0]
