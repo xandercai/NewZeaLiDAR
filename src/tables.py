@@ -36,6 +36,7 @@ class DATASET(Base):
     # source_id = Column(String, comment='dataset id in the source')
     survey_start_date = Column(Date, comment='survey start date')
     survey_end_date = Column(Date, comment='survey end date')
+    publication_date = Column(Date, comment='publication date')
     # points_per_square_meter = Column(Float, comment='point density')
     point_cloud_density = Column(Float,
                                  comment='indicator of the resolution of the data in points per square meter')
