@@ -235,7 +235,7 @@ def map_dataset_name(engine: Engine, instructions_file: Union[str, pathlib.Path]
         instructions = json.load(f)
         if not instructions["instructions"].get("dataset_mapping"):
             instructions["instructions"]["dataset_mapping"] = {"lidar": {}}
-        instructions["instructions"]["dataset_mapping"]["lidar"] = dict(zip(df['name'], df.index))
+        instructions["instructions"]["dataset_mapping"]["lidar"] = dict(zip(df['name'], df.index+1))
         instructions["instructions"]["dataset_mapping"]["lidar"]["Unknown"] = 0
     with open(instructions_file, 'w') as f:
         json.dump(instructions, f, indent=2)
@@ -302,19 +302,25 @@ def retrieve_lidar(engine: Engine,
     datasets_dict, geometry, tile_path_list, _ = retrieve_dataset(
         engine, boundary_file, sort_by, buffer=buffer
     )
+    list_pop_dataset = []
     for dataset_name in datasets_dict.keys():
         query = f"""SELECT uuid, geometry FROM tile
                     WHERE ST_Intersects(geometry, ST_SetSRID('{geometry}'::geometry, 2193))
                     AND dataset = '{dataset_name}' ;"""
         gdf = gpd.read_postgis(query, engine, geom_col='geometry')
         if gdf.empty:
-            logger.info(f"{dataset_name} does not have any tile in the ROI geometry.")
+            logger.warning(f"{dataset_name} does not have any tile in the ROI geometry, will pop the dataset. "
+                           f"The reason may be the dataset extent in .kml file is larger than "
+                           f"the tile extent in tile.zip file.")
+            list_pop_dataset.append(dataset_name)
             continue
         uuid = tuple(gdf['uuid'].to_list()) if len(gdf) > 1 else str(f"""('{gdf["uuid"].values[0]}')""")
         query = f"SELECT file_path FROM lidar WHERE uuid IN {uuid} ;"
         df = pd.read_sql(query, engine)
         if df.empty:
-            logger.info(f"{dataset_name} does not have any .laz file in the ROI geometry.")
+            logger.warning(f"{dataset_name} does not have any .laz file in the ROI geometry, will pop the dataset. "
+                           f"The reason may be the dataset lidar files are not downloaded completely.")
+            list_pop_dataset.append(dataset_name)
             continue
         datasets_dict[dataset_name]["file_paths"] = [
             pathlib.PurePosixPath(p) for p in sorted(df['file_path'].to_list())
@@ -325,6 +331,9 @@ def retrieve_lidar(engine: Engine,
         logging.debug(f'Dataset {dataset_name} has '
                       f'{len(datasets_dict[dataset_name]["file_paths"])} lidar files in '
                       f'ROI with buffer distance {buffer} mitre.')
+    if list_pop_dataset:
+        for dataset_name in list_pop_dataset:
+            datasets_dict.pop(dataset_name)
     return datasets_dict
 
 
