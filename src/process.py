@@ -129,7 +129,7 @@ def single_process(engine: Engine,
                    mode: str = 'api',
                    buffer: Union[int, float] = 0) -> Union[dict, None]:
     """the gen_dem process in a single row of geodataframe"""
-    logger.info(f'*** Processing {index} in {mode} mode with geometry buffer {buffer} ...')
+    logger.info(f'\n\n******* Processing {index} in {mode} mode with geometry buffer {buffer} *******')
     single_instructions = gen_instructions(engine, instructions, index, mode=mode, buffer=buffer)
     result_path = (pathlib.Path(single_instructions["instructions"]["data_paths"]["local_cache"]) /
                    pathlib.Path(single_instructions['instructions']['data_paths']['subfolder']))
@@ -144,6 +144,9 @@ def single_process(engine: Engine,
             return None
     else:
         raise ValueError(f'Invalid mode: {mode}')
+    if not single_instructions["instructions"]["dataset_mapping"]:
+        logger.error(f'The {index} catchment input instructions without dataset mapping, please check!')
+        return None
     gen_dem(single_instructions)
     gc.collect()
     return single_instructions
