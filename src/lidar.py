@@ -17,7 +17,8 @@ import pandas as pd
 from sqlalchemy.engine import Engine
 
 from src import utils
-from src.tables import TILE, LIDAR, SDC, CATCHMENT, create_table, deduplicate_table, get_data_by_id
+from src.tables import (TILE, LIDAR, SDC, CATCHMENT, DATASET,
+                        create_table, deduplicate_table, get_data_by_id, read_postgres_table)
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
             # note that the search_polygon added buffer by default in geoapis response,
             # no need to add buffer here.
             search_polygon=gdf,
-            download_limit_gbytes=800,
+            download_limit_gbytes=20_000,  # 2TB
             verbose=True
         )
         try:
@@ -357,7 +358,9 @@ def run(roi_id: Union[int, str, list] = None,
         elif pathlib.Path(roi_file).exists():
             _, _, _, dataset = utils.retrieve_dataset(engine, boundary_file=roi_file, buffer=buffer)
         else:
-            raise ValueError(f"Input parameters are not correct.")
+            logger.info(f"Use all dataset name to download lidar data.")
+            gdf = read_postgres_table(engine, DATASET)
+            dataset = sorted(gdf['name'].tolist())
         # filter out Waikato dataset
         dataset = [name for name in dataset if 'LiDAR_' not in name]
         if len(dataset) < 1:
