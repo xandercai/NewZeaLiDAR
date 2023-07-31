@@ -33,7 +33,7 @@ def get_extent_geometry(extent_file: str) -> gpd.GeoSeries.values:
     """Get extent geometry from kml file."""
     gdf = gpd.GeoDataFrame(crs='epsg:2193', geometry=gpd.GeoSeries())
     file = pathlib.Path(extent_file)
-    file = file.parent / pathlib.Path('NEW__' + str(file.name))
+    file = file.parent / pathlib.Path('tmp_datasets__' + str(file.name))
     if os.path.exists(file):
         gdf = gpd.read_file(file)
         gdf = gdf.to_crs(2193)
@@ -61,6 +61,7 @@ class DatasetItem(scrapy.Item):
     # collector = scrapy.Field()
     survey_start_date = scrapy.Field()
     survey_end_date = scrapy.Field()
+    publication_date = scrapy.Field()
     point_cloud_density = scrapy.Field()
     meta_path = scrapy.Field()
     extent_path = scrapy.Field()
@@ -81,11 +82,11 @@ class ExtraFilesPipeline(FilesPipeline):
         end_str = request.url.split('=')[-1]
         if end_str == 'xml':
             directory = pathlib.Path(item['meta_path']).parent
-            name = 'NEW__' + str(pathlib.Path(item['meta_path']).name)
+            name = 'tmp_datasets__' + str(pathlib.Path(item['meta_path']).name)
             file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
         elif end_str == 'true':  # kml url is ended with "download=true"
             directory = pathlib.Path(item['extent_path']).parent
-            name = 'NEW__' + str(pathlib.Path(item['extent_path']).name)
+            name = 'tmp_datasets__' + str(pathlib.Path(item['extent_path']).name)
             file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
         else:
             logger.warning(f'input url {request.url} is not correct.')
@@ -107,6 +108,7 @@ class ExtraFilesPipeline(FilesPipeline):
                 # 'collector': item['collector'],
                 'survey_start_date': item['survey_start_date'],
                 'survey_end_date': item['survey_end_date'],
+                'publication_date': item['publication_date'],
                 'point_cloud_density': item['point_cloud_density'],
                 'original_datum': item['datum'],
                 'meta_path': item['meta_path'],
@@ -134,6 +136,7 @@ class ExtraFilesPipeline(FilesPipeline):
                                'describe',
                                'survey_start_date',
                                'survey_end_date',
+                               'publication_date',
                                'point_cloud_density',
                                'original_datum',
                                # 'collector',
@@ -209,6 +212,11 @@ class DatasetSpider(CrawlSpider):
             item['survey_start_date'] = datetime.strptime(date, '%m/%d/%Y').strftime('%Y-%m-%d')
             date = search_string(r'(\d{2}/\d{2}/\d{4})', survey_date[1])
             item['survey_end_date'] = datetime.strptime(date, '%m/%d/%Y').strftime('%Y-%m-%d')
+        date = response.xpath(
+            '//strong[text()="Publication Date"]/following-sibling::text()'
+        ).extract()[0].strip()
+        date = search_string(r'(\d{2}/\d{2}/\d{4})', date)
+        item['publication_date'] = datetime.strptime(date, '%m/%d/%Y').strftime('%Y-%m-%d')
         # item['collector'] = response.xpath(
         #     '//text()[contains(.,"Collector")]/following-sibling::ul[1]//text()'
         # ).extract()
@@ -258,6 +266,8 @@ def crawl_dataset() -> None:
     process.start()
     time.sleep(180)  # sleep 3 minutes for scrapy to finish downloading files.
     try:
+        # use an exception to stop the process because process.stop() does not work in some cases.
+        # which will cause multiple processes running for the following processes (such as `lidar` process).
         raise CloseSpider()
     except CloseSpider:
         logger.info('Finish crawling datasets from OpenTopography.')
@@ -276,19 +286,20 @@ def rename_file():
     count = 0
     for file in list_file:
         file = pathlib.Path(file)
-        if file.name.startswith('NEW__'):
-            new_file = file.parent / file.name.replace('NEW__', '')
+        if file.name.startswith('tmp_datasets__'):
+            new_file = file.parent / file.name.replace('tmp_datasets__', '')
             if new_file.exists():
                 new_file.unlink()
             file.rename(new_file)
             count += 1
-    logger.info(f'Finish renaming {count} .xml and .kml file.')
+    logger.debug(f'Finish renaming {count} .xml and .kml file.')
 
 
 def run():
     """Run the module."""
     crawl_dataset()
     rename_file()
+    logger.info('Finish processing datasets by scrapy.')
 
 
 if __name__ == '__main__':
