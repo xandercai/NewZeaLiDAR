@@ -134,7 +134,7 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
                          pathlib.Path(f'{dataset_name}' /
                          pathlib.Path(f'{dataset_name}_TileIndex.zip')))
             if tile_file.exists():
-                logger.info(f"Tile index file {tile_file} already exists, delete it.")
+                logger.info(f"Tile index file {tile_file} already exists, delete it to download new files.")
                 tile_file.unlink()
             lidar_fetcher = geoapis.lidar.OpenTopography(
                 cache_path=data_path,
