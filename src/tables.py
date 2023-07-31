@@ -496,8 +496,10 @@ def get_within_catchment_by_geometry(engine: Engine,
     return gpd.read_postgis(query, engine, geom_col='geometry')
 
 
-def read_postgres_table(engine: Engine, table: str, limit: int = 0) -> pd.DataFrame:
+def read_postgres_table(engine: Engine, table: Union[str, Type[Ttable]], limit: int = 0) -> pd.DataFrame:
     """Read table from postgres into DataFrame."""
+    if not isinstance(table, str):
+        table = table.__tablename__
     if limit == 0:
         query = f"SELECT * FROM {table} ;"
     else:
