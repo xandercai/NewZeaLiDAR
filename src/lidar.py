@@ -142,7 +142,7 @@ def get_lidar_data(data_path: Union[str, pathlib.Path],
                 # note that the search_polygon added buffer by default in geoapis response,
                 # no need to add buffer here.
                 # search_polygon=gdf,
-                download_limit_gbytes=800,
+                download_limit_gbytes=20_000,  # 2TB
                 verbose=True
             )
             try:
