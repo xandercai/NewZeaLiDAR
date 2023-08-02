@@ -526,7 +526,7 @@ def katana(geometry: shapely.geometry, threshold: Union[int, float], count: int 
     return final_result
 
 
-def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]]) -> gpd.GeoDataFrame:
+def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]], filter_it: bool = True) -> gpd.GeoDataFrame:
     """
     Generate catchment extent from catchment table or DEM table.
     """
@@ -538,7 +538,10 @@ def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]]) -> gpd.Geo
         gdf = gpd.GeoDataFrame(df[['catch_id', 'geometry']], crs='epsg:2193', geometry='geometry')
     else:
         gdf = gpd.read_postgis(f"SELECT * FROM {table}", engine, crs=2193, geom_col='geometry')
-    geom = filter_geometry(gdf['geometry'])
+    if filter_it:
+        geom = filter_geometry(gdf['geometry'])
+    else:
+        geom = gdf.unary_union
     return gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
 
 
@@ -567,15 +570,15 @@ def check_dem_exist_by_id(engine: Engine, index) -> bool:
     return result
 
 
-def save_gpkg(gdf: gpd.GeoDataFrame, table: Union[Type[Ttable], str]):
+def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
     """
     Save source catchments to GPKG
     """
     gpkg_path = pathlib.Path(get_env_variable('DATA_DIR')) / pathlib.Path('GPKG')
-    if isinstance(table, str):
-        file_name = f'{table}.gpkg'
+    if isinstance(file, str):
+        file_name = f'{file}.gpkg'
     else:
-        file_name = f'{table.__tablename__}.gpkg'
+        file_name = f'{file.__tablename__}.gpkg'
     pathlib.Path(gpkg_path).mkdir(parents=True, exist_ok=True)
     gdf.set_crs(epsg=2193, inplace=True)
     gdf.to_file(str(gpkg_path / pathlib.Path(file_name)), driver='GPKG')
