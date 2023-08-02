@@ -267,18 +267,10 @@ def run(catch_id: Union[int, str, list] = None,
         catch_id = sorted(_gdf['catch_id'].to_list())
         logger.info(f'******* FULL CATCHMENTS MODE *********\nCalculating {len(catch_id)} Catchments DEM in total.')
 
-    # generate catchment boundary geodataframe
-    gpkg_dir = pathlib.Path(utils.get_env_variable('DATA_DIR')) / pathlib.Path('GPKG')
-    lidar_extent_file = gpkg_dir / pathlib.Path('lidar_extent.gpkg')
-    pathlib.Path(gpkg_dir).mkdir(parents=True, exist_ok=True)
-    if pathlib.Path(lidar_extent_file).exists():
-        lidar_extent = gpd.read_file(lidar_extent_file)
-    else:
-        # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
-        lidar_extent = utils.gen_table_extent(engine, DATASET)
-        # save lidar extent to check on QGIS
-        if gpkg:
-            lidar_extent.to_file(str(gpkg_dir / pathlib.Path('lidar_extent.gpkg')), driver='GPKG')
+    # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
+    lidar_extent = utils.gen_table_extent(engine, DATASET)
+    # save lidar extent to check on QGIS
+    utils.save_gpkg(lidar_extent, 'lidar_extent')
 
     runtime = []
     failed = []
