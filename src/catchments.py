@@ -779,8 +779,8 @@ def gen_coast_catchments(coast_distance: Union[int, float] = COAST_DISTANCE,
     gdf = pd.concat([gdf_catchments, gdf_grid], ignore_index=True)
     gdf = gdf.sort_values(by=['catch_id']).reset_index(drop=True)
 
-    if gpkg:
-        utils.save_gpkg(gdf, tables.CATCHMENT)
+    # always save to gpkg for checking
+    utils.save_gpkg(gdf, tables.CATCHMENT)
 
     gdf_to_db = tables.prepare_to_db(gdf)
     tables.create_table(engine, tables.CATCHMENT)
