@@ -540,9 +540,9 @@ def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]], filter_it:
         gdf = gpd.read_postgis(f"SELECT * FROM {table}", engine, crs=2193, geom_col='geometry')
     if filter_it:
         geom = filter_geometry(gdf['geometry'])
-    else:
-        geom = gdf.unary_union
-    return gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
+        gdf = gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
+    return gdf
+
 
 
 def check_dem_exist_by_id(engine: Engine, index) -> bool:
