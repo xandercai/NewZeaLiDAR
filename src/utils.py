@@ -544,7 +544,6 @@ def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]], filter_it:
     return gdf
 
 
-
 def check_dem_exist_by_id(engine: Engine, index) -> bool:
     """
     Check if the DEM file exists in the database by catch_id
@@ -574,7 +573,7 @@ def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
     """
     Save source catchments to GPKG
     """
-    gpkg_path = pathlib.Path(get_env_variable('DATA_DIR')) / pathlib.Path('GPKG')
+    gpkg_path = pathlib.Path(get_env_variable('DATA_DIR')) / pathlib.Path('gpkg')
     if isinstance(file, str):
         file_name = f'{file}.gpkg'
     else:

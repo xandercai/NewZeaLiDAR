@@ -185,18 +185,18 @@ def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: dict) -
         logger.info(f'Updated {index} in {table.__tablename__} at {timestamp}.')
     else:
         query = f"""INSERT INTO {table.__tablename__} (
-                    catch_id, 
-                    raw_dem_path, 
-                    hydro_dem_path, 
-                    extent_path, 
-                    created_at, 
+                    catch_id,
+                    raw_dem_path,
+                    hydro_dem_path,
+                    extent_path,
+                    created_at,
                     updated_at
                     ) VALUES (
-                    {index}, 
-                    '{raw_dem_path}', 
-                    '{result_dem_path}', 
-                    '{raw_extent_path}', 
-                    '{timestamp}', 
+                    {index},
+                    '{raw_dem_path}',
+                    '{result_dem_path}',
+                    '{raw_extent_path}',
+                    '{timestamp}',
                     '{timestamp}'
                     ) ;"""
         engine.execute(query)
@@ -297,7 +297,7 @@ def run(catch_id: Union[int, str, list] = None,
             # save lidar extent to check on QGIS
             if gpkg:
                 dem_extent = utils.gen_table_extent(engine, DEM)
-                dem_extent.to_file(str(gpkg_dir / pathlib.Path(f'dem_extent.gpkg')), driver='GPKG')
+                utils.save_gpkg(dem_extent, 'dem_extent')
         else:
             logger.info(f'Catchment {i} is not within lidar extent, ignor it.')
 
