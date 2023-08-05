@@ -265,23 +265,30 @@ def run(catch_id: Union[int, str, list] = None,
     else:
         _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
         catch_id = sorted(_gdf['catch_id'].to_list())
-        logger.info(f'******* FULL CATCHMENTS MODE *********\nCalculating {len(catch_id)} Catchments DEM in total.')
+        logger.info(f'******* FULL CATCHMENTS MODE ********* {len(catch_id)} Catchments DEM in total.')
 
     # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
     lidar_extent = utils.gen_table_extent(engine, DATASET)
     # save lidar extent to check on QGIS
     utils.save_gpkg(lidar_extent, 'lidar_extent')
 
+    if start is not None:
+        assert int(start) in catch_id, f'Input start index {start} is not in catch_id list.'
+        start_index = catch_id.index(int(start))
+        catch_id = catch_id[start_index:]
+
     runtime = []
     failed = []
-    for i in catch_id if start is None else catch_id[int(start):]:
+
+    logger.info(f'******* Start process from catch_id {catch_id[0]} to {catch_id[-1]} *********')
+    for i in catch_id:
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # check if catchment boundary of RoI within lidar extent
         if lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
             # generate catchment boundary file for each catchment
             utils.gen_boundary_file(catch_path, catchment_boundary, i)
             # generate hydrological conditioned dem for each catchment
-            start = datetime.now()
+            t_start = datetime.now()
             try:
                 single_instructions = single_process(engine, instructions, i, mode=mode, buffer=buffer)
             except Exception as e:
@@ -290,8 +297,9 @@ def run(catch_id: Union[int, str, list] = None,
                              f'\n{json.dumps(instructions, indent=2, default=str)}')
                 failed.append(i)
                 continue
-            end = datetime.now()
-            runtime.append(end - start)
+            t_end = datetime.now()
+            logger.info(f'Catchment {i} finished. Runtime: {t_end - t_start}')
+            runtime.append(t_end - t_start)
             store_hydro_to_db(engine, DEM, single_instructions)
 
             # save lidar extent to check on QGIS
