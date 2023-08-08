@@ -274,9 +274,12 @@ def run(catch_id: Union[int, str, list] = None,
     utils.save_gpkg(lidar_extent, 'lidar_extent')
 
     if start is not None:
-        assert int(start) in catch_id, f'Input start index {start} is not in catch_id list.'
-        start_index = catch_id.index(int(start))
-        catch_id = catch_id[start_index:]
+        if int(start) in catch_id:
+            start_index = catch_id.index(int(start))
+            catch_id = catch_id[start_index:]
+        else:
+            logger.info(f'Input start index {start} is not in catch_id list.')
+            catch_id = sorted([x for x in catch_id if x > int(start)])
 
     runtime = []
     failed = []
