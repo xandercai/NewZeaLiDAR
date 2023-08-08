@@ -65,7 +65,8 @@ def gen_instructions(engine: Engine,
                      mode: str = 'api',
                      buffer: Union[int, float] = 0) -> dict:
     """Read basic instruction file and adds keys and uses geojson as catchment_boundary"""
-    instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
+    # instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
+    instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count() - 1  # give scheduler one core
     data_dir = pathlib.PurePosixPath(utils.get_env_variable("DATA_DIR"))
     dem_dir = pathlib.PurePosixPath(utils.get_env_variable("DEM_DIR"))
     index_dir = pathlib.PurePosixPath(str(index))
