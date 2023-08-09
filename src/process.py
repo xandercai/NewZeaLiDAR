@@ -205,6 +205,65 @@ def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: dict) -
     # check_table_duplication(engine, table, 'catch_id')
 
 
+def run_api(index: Union[int, str],
+            catchment_boundary: Union[gpd.GeoDataFrame, str],
+            buffer: Union[int, float] = 0) -> None:
+    """
+    Run the hydrological conditioned dem generation process for a single catchment.
+
+    Parameters
+    ----------
+    index : Union[int, str]
+        The index of the catchment. Users should make sure it is not conflict with
+        the existing catchment index in database.
+    catchment_boundary : Union[gpd.GeoDataFrame, str]
+        The catchment boundary. If it is a string, it should be the string of geojson data (not file path).
+    buffer : Union[int, float], optional
+        The buffer distance of the catchment boundary, by default 0.
+    """
+    assert isinstance(index, (int, str)), f'Catchment index {index} is not digit or string.'
+    if isinstance(index, str):
+        assert index.isdigit(), f'Catchment index {index} is not digit.'
+    logger.info(f'Start Catchment {index} processing...')
+    engine = utils.get_database()
+    data_dir = pathlib.Path(utils.get_env_variable("DATA_DIR"))
+    dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
+    result_dir = data_dir / dem_dir
+    if isinstance(catchment_boundary, str):
+        catchment_boundary = gpd.read_file(catchment_boundary, driver='GeoJSON')
+
+    lidar_extent_file = (
+            pathlib.Path(utils.get_env_variable('DATA_DIR')) /
+            pathlib.Path('gpkg') /
+            pathlib.Path('lidar_extent.gpkg'))
+    if lidar_extent_file.exists():
+        lidar_extent = gpd.read_file(lidar_extent_file, driver='GPKG')
+    else:
+        # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
+        lidar_extent = utils.gen_table_extent(engine, DATASET)
+        # save lidar extent to check on QGIS
+        utils.save_gpkg(lidar_extent, 'lidar_extent')
+    if lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
+        json_file = pathlib.Path(result_dir) / pathlib.Path(f'{index}') / pathlib.Path(f'{index}.geojson')
+        json_file.parent.mkdir(parents=True, exist_ok=True)
+        if not pathlib.Path(json_file).exists():
+            utils.gen_boundary_file(result_dir, catchment_boundary, index, buffer)
+        instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
+        with open(instructions_file, 'r') as f:
+            instructions = json.loads(f.read())
+        try:
+            single_instructions = single_process(engine, instructions, index, mode='api', buffer=buffer)
+            store_hydro_to_db(engine, DEM, single_instructions)
+            logger.info(f'Catchment {index} finished.')
+        except Exception as e:
+            logger.exception(f'Catchment {index} failed. Error message:\n{e}')
+            logger.error(f'Catchment {index} failed. Running instructions:'
+                         f'\n{json.dumps(instructions, indent=2, default=str)}')
+            pass
+        engine.dispose()
+        gc.collect()
+
+
 def run(catch_id: Union[int, str, list] = None,
         area: Union[int, float] = None,
         mode: str = 'api',
@@ -325,9 +384,11 @@ def run(catch_id: Union[int, str, list] = None,
 if __name__ == '__main__':
     # catch_list = [1588, 1596]
     # catch_list = [1548, 1394]
-    catch_list = 1394
+    # catch_list = 1394
     # run(catch_id=catch_list, mode='local')
-    run(catch_id=catch_list, mode='api')
+    # run(catch_id=catch_list, mode='api')
     # run(catch_id=1, mode='api', buffer=12)
     # run(area=1000000, mode='api', buffer=12)
     # run(area=1000000, mode='local', buffer=12)
+    gdf = gpd.read_file(r'configs/demo.geojson')
+    run_api(1234567, gdf)
