@@ -215,11 +215,8 @@ def gen_boundary_file(data_path: Union[str, pathlib.Path],
     }
     feature = geojson.Feature(geometry=gdf_boundary['geometry'][0], properties={})
     feature_collection = geojson.FeatureCollection([feature], name='selected_polygon', crs=feature_crs)
-    file_path = str(pathlib.Path(data_path) /
-                    pathlib.Path(f'{index}') /
-                    pathlib.Path(f'{index}.geojson'))
-    if not os.path.exists(os.path.dirname(file_path)):
-        os.makedirs(os.path.dirname(file_path))
+    file_path = pathlib.Path(data_path) / pathlib.Path(f'{index}') / pathlib.Path(f'{index}.geojson')
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, 'w') as f:
         geojson.dump(feature_collection, f, indent=2)
     logging.info(f"Generate region of interest geojson file at {file_path}.")
