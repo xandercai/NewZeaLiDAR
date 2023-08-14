@@ -11,7 +11,7 @@
     },
     "processing": {
       "chunk_size": 100,
-      "memory_limit": "10GiB"
+      "memory_limit": 0
     },
     "general": {
       "set_dem_shoreline": true,
