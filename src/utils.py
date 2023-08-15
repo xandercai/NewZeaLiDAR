@@ -343,9 +343,15 @@ def retrieve_lidar(engine: Engine,
         datasets_dict[dataset_name]["file_paths"] = [
             pathlib.PurePosixPath(p) for p in sorted(df['file_path'].to_list())
         ]
-        datasets_dict[dataset_name]["tile_index_file"] = [
-            pathlib.PurePosixPath(p) for p in tile_path_list if dataset_name in p
-        ][0]
+        if "LiDAR_" in dataset_name:  # to handle waikato datasets
+            _dataset_name = "_".join(dataset_name.split("_")[:2])
+            datasets_dict[dataset_name]["tile_index_file"] = [
+                pathlib.PurePosixPath(p) for p in tile_path_list if _dataset_name in p
+            ][0]
+        else:
+            datasets_dict[dataset_name]["tile_index_file"] = [
+                pathlib.PurePosixPath(p) for p in tile_path_list if dataset_name in p
+            ][0]
         logging.debug(f'Dataset {dataset_name} has '
                       f'{len(datasets_dict[dataset_name]["file_paths"])} lidar files in '
                       f'ROI with buffer distance {buffer} mitre.')

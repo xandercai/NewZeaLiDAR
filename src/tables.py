@@ -416,9 +416,11 @@ def get_data_by_id(engine: Engine,
         df = gpd.read_postgis(query, engine, geom_col=geom_col)
     else:
         df = pd.read_sql(query, engine)
-    if len(df) != len(index):
+    if not df.empty and len(df) != len(index):
         not_exist = [i for i in index if i not in df['catch_id'].to_list()]
-        logger.warning(f"Try find {index}, but {not_exist} not exist in table {table}.")
+        logger.info(f"Try find {index}, but {not_exist} not exist in table {table}.")
+    if df.empty:
+        logger.info(f"Try find {index}, but not exist in table {table}.")
     return df
 
 

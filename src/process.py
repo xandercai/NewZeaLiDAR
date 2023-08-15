@@ -65,8 +65,7 @@ def gen_instructions(engine: Engine,
                      mode: str = 'api',
                      buffer: Union[int, float] = 0) -> dict:
     """Read basic instruction file and adds keys and uses geojson as catchment_boundary"""
-    # instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
-    instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count() - 1  # give scheduler one core
+    instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
     data_dir = pathlib.PurePosixPath(utils.get_env_variable("DATA_DIR"))
     dem_dir = pathlib.PurePosixPath(utils.get_env_variable("DEM_DIR"))
     index_dir = pathlib.PurePosixPath(str(index))
@@ -272,6 +271,7 @@ def run(catch_id: Union[int, str, list] = None,
         mode: str = 'api',
         buffer: float = 10,
         start: Union[int, str] = None,
+        update: bool = False,
         gpkg: bool = True) -> None:
     """
     Main function for generate hydrological conditioned dem of catchments.
@@ -284,6 +284,7 @@ def run(catch_id: Union[int, str, list] = None,
     :param buffer: the catchment boundary buffer for safeguard catchment boundary,
         default value is 10 meters.
     :param start: the start index of catchment in catchment table, for regression use.
+    :param update: if True, run and update the existing dem in `hydro_dem` table, else pass if dem exist.
     :param gpkg: if True, save the hydrological conditioned dem as geopackage.
     """
     engine = utils.get_database()
@@ -299,9 +300,8 @@ def run(catch_id: Union[int, str, list] = None,
     if catch_id is not None:
         if isinstance(catch_id, str):
             assert catch_id.isdigit(), 'Input catch_id must be integer string.'
-        if isinstance(catch_id, int):
-            assert catch_id > 0, 'Input catch_id must be positive integer.'
         catch_id = catch_id if isinstance(catch_id, list) else [catch_id]
+        catch_id = [int(i) for i in catch_id]
         _gdf = pd.read_sql(f"SELECT catch_id FROM {SDC.__tablename__} ;", engine)
         sdc_id = sorted(_gdf['catch_id'].to_list())
         _gdf = pd.read_sql(f"SELECT catch_id FROM {CATCHMENT.__tablename__} ;", engine)
@@ -348,9 +348,12 @@ def run(catch_id: Union[int, str, list] = None,
 
     logger.info(f'******* Start process from catch_id {catch_id[0]} to {catch_id[-1]} *********')
     for i in catch_id:
+        # to check if catchment boundary of RoI within lidar extent
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
-        # check if catchment boundary of RoI within lidar extent
-        if lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
+        # to check if already exist in hydro_dem table, if exist_ok, run and update, else pass
+        exist_ok = (get_data_by_id(engine, DEM, i, geom_col='')).empty or update
+
+        if lidar_extent.buffer(buffer).intersects(catchment_boundary).any() and exist_ok:
             # generate catchment boundary file for each catchment
             utils.gen_boundary_file(catch_path, catchment_boundary, i)
             # generate hydrological conditioned dem for each catchment
@@ -367,7 +370,7 @@ def run(catch_id: Union[int, str, list] = None,
             if single_instructions:
                 store_hydro_to_db(engine, DEM, single_instructions)
             else:
-                logger.warning(f'Catchment {i} failed. No instructions generated. Please check.')
+                logger.error(f'Catchment {i} failed. No instructions generated. Please check.')
                 failed.append(i)
                 continue
             logger.info(f'Catchment {i} finished. Runtime: {t_end - t_start}')
@@ -378,7 +381,10 @@ def run(catch_id: Union[int, str, list] = None,
                 dem_extent = utils.gen_table_extent(engine, DEM)
                 utils.save_gpkg(dem_extent, 'dem_extent')
         else:
-            logger.info(f'Catchment {i} is not within lidar extent, ignor it.')
+            if exist_ok:
+                logger.info(f'Catchment {i} is not within lidar extent, ignor it.')
+            else:
+                logger.info(f'Catchment {i} already exist in hydro_dem table, ignor it.')
 
     if len(failed):
         logger.info(f'Failed {len(failed)} catchments: \n{failed}')
