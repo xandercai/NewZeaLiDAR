@@ -253,8 +253,11 @@ def run_api(index: Union[int, str],
             instructions = json.loads(f.read())
         try:
             single_instructions = single_process(engine, instructions, index, mode='api', buffer=buffer)
-            store_hydro_to_db(engine, DEM, single_instructions)
-            logger.info(f'Catchment {index} finished.')
+            if single_instructions:
+                store_hydro_to_db(engine, DEM, single_instructions)
+                logger.info(f'Catchment {index} finished.')
+            else:
+                logger.warning(f'Catchment {index} failed. No instructions generated. Please check.')
         except Exception as e:
             logger.exception(f'Catchment {index} failed. Error message:\n{e}')
             logger.error(f'Catchment {index} failed. Running instructions:'
@@ -361,9 +364,14 @@ def run(catch_id: Union[int, str, list] = None,
                 failed.append(i)
                 continue
             t_end = datetime.now()
+            if single_instructions:
+                store_hydro_to_db(engine, DEM, single_instructions)
+            else:
+                logger.warning(f'Catchment {i} failed. No instructions generated. Please check.')
+                failed.append(i)
+                continue
             logger.info(f'Catchment {i} finished. Runtime: {t_end - t_start}')
             runtime.append(t_end - t_start)
-            store_hydro_to_db(engine, DEM, single_instructions)
 
             # save lidar extent to check on QGIS
             if gpkg:

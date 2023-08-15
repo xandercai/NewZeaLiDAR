@@ -15,7 +15,7 @@ from sqlalchemy.engine import Engine
 
 from src import utils
 from src.lidar import store_lidar_to_db, check_file_number
-from src.tables import TILE, create_table, deduplicate_table
+from src.tables import TILE, DATASET, create_table, deduplicate_table
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,10 @@ def store_tile_to_db(engine: Engine, dataset: str, tile_path: str) -> gpd.GeoDat
     """
     zip_file = utils.get_files('_TileIndex.zip', tile_path, expect=1)
     gdf_from_zip = gpd.GeoDataFrame.from_file('zip://' + zip_file)
+    dataset_geom = utils.get_geometry_from_db(engine, DATASET, 'name', dataset)
+    # only keep the tiles that intersect with the dataset,
+    # because some dataset (LiDAR_2007_2008_*) share the same tile index file.
+    gdf_from_zip = gdf_from_zip[gdf_from_zip.intersects(dataset_geom)]
     gdf_to_db = gen_tile_data(gdf_from_zip, dataset)
     gdf_to_db['created_at'] = pd.Timestamp.now().strftime('%Y-%m-%d %X')
     # gdf_to_db = gdf_to_db[['uuid', 'dataset', 'file_name', 'source',

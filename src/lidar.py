@@ -240,7 +240,7 @@ def gen_lidar_data(gdf_in: gpd.GeoDataFrame,
         df.loc[df['uuid'].isnull(), 'uuid'] = df['uuid'].apply(lambda l: uuid.uuid4())
     duplicate_rows = df[df.duplicated(subset=['uuid'], keep=False)]
     assert len(duplicate_rows) == 0, (
-        f"{int(len(duplicate_rows) / 2)} .las files duplicated, please check dataset file.\n"
+        f"{int(len(duplicate_rows) / 2)} .laz files duplicated, please check dataset file.\n"
         f"{duplicate_rows['uuid'].tolist()},\n"
         f"{duplicate_rows['file_name'].tolist()}."
     )
