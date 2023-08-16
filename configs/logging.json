@@ -47,19 +47,19 @@
 
     "distributed": {
       "level": "WARNING",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": ["console", "info_file_handler"],
       "propagate": false
     },
 
     "distributed.client": {
       "level": "WARNING",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": ["console", "info_file_handler"],
       "propagate": false
     },
 
     "distributed.worker": {
       "level": "WARNING",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": ["console", "info_file_handler"],
       "propagate": false
     },
 
