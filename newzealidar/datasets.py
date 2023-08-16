@@ -22,8 +22,8 @@ from scrapy.pipelines.files import FilesPipeline
 from scrapy.spiders import CrawlSpider
 from scrapy.exceptions import CloseSpider
 
-from src import utils
-from src.tables import DATASET, create_table, delete_table, get_max_value
+from newzealidar import utils
+from newzealidar.tables import DATASET, create_table, delete_table, get_max_value
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +270,7 @@ def crawl_dataset() -> None:
                       'AppleWebKit/537.36 (KHTML, like Gecko) '
                       'Chrome/34.0.1847.131 Safari/537.36',
         'DOWNLOAD_DELAY': 1.5,  # to avoid request too frequently and get incomplete response.
-        'ITEM_PIPELINES': {'src.datasets.ExtraFilesPipeline': 1},
+        'ITEM_PIPELINES': {'newzealidar.datasets.ExtraFilesPipeline': 1},
         'FILES_STORE': './',
         'LOG_LEVEL': 'INFO',  # this setting does not working. custom_settings does not work neither. TODO: debug
     })
@@ -312,6 +312,14 @@ def rename_file():
 
 
 def run():
+    """Run the module."""
+    crawl_dataset()
+    rename_file()
+    logger.info('Finish processing datasets by scrapy.')
+
+
+# for Digital-Twins
+def main():
     """Run the module."""
     crawl_dataset()
     rename_file()

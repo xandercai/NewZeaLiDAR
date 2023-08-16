@@ -3,7 +3,8 @@
         [
             {
                  "type": "readers.las",
-                 "filename": "#"
+                 "filename": "#",
+                 "compression": "laszip"
             },
             {
                  "type": "filters.reprojection",

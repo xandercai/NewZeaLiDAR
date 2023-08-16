@@ -16,9 +16,9 @@ import geopandas as gpd
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from src import utils
-from src.tables import (TILE, LIDAR, SDC, CATCHMENT, DATASET,
-                        create_table, deduplicate_table, get_data_by_id, read_postgres_table)
+from newzealidar import utils
+from newzealidar.tables import (TILE, LIDAR, SDC, CATCHMENT, DATASET,
+                                create_table, deduplicate_table, get_data_by_id, read_postgres_table)
 
 logger = logging.getLogger(__name__)
 

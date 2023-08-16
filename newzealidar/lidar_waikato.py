@@ -13,9 +13,9 @@ import geopandas as gpd
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from src import utils
-from src.lidar import store_lidar_to_db, check_file_number
-from src.tables import TILE, DATASET, create_table, deduplicate_table
+from newzealidar import utils
+from newzealidar.lidar import store_lidar_to_db, check_file_number
+from newzealidar.tables import TILE, DATASET, create_table, deduplicate_table
 
 logger = logging.getLogger(__name__)
 

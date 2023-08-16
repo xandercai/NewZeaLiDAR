@@ -21,17 +21,17 @@ import geopandas as gpd
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from src import utils
-from src.tables import (Ttable, SDC, CATCHMENT, DEM, DATASET, create_table,
-                        get_data_by_id, get_split_catchment_by_id, get_id_under_area, check_table_duplication)
+from newzealidar import utils
+from newzealidar.tables import (Ttable, SDC, CATCHMENT, DEM, DATASET, create_table,
+                                get_data_by_id, get_split_catchment_by_id, get_id_under_area, check_table_duplication)
 
+# if we use Fork GeoFabrics to fix GeoFabrics' issues:
 # sys.path.insert(0, str(pathlib.Path(r'../ForkGeoFabrics/src/geofabrics')))
+# otherwise:
 from geofabrics import processor
 
 logger = logging.getLogger(__name__)
 
-# Use Fork GeoFabrics
-# sys.path.insert(0, str(pathlib.Path(r'../ForkGeoFabrics/src/geofabrics')))
 
 # # for dask, set check time to 3 hours (or other appropriate value) to eliminate overwhelming warning like:
 # #     distributed.core - INFO - Event loop was unresponsive in Worker for 3.90s.
@@ -204,7 +204,8 @@ def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: dict) -
     # check_table_duplication(engine, table, 'catch_id')
 
 
-def run_api(index: Union[int, str],
+# for Digital-Twins
+def main(index: Union[int, str],
             catchment_boundary: Union[gpd.GeoDataFrame, str],
             buffer: Union[int, float] = 0) -> None:
     """
@@ -405,4 +406,4 @@ if __name__ == '__main__':
     # run(area=1000000, mode='api', buffer=12)
     # run(area=1000000, mode='local', buffer=12)
     gdf = gpd.read_file(r'configs/demo.geojson')
-    run_api(1234567, gdf)
+    main(1234567, gdf)

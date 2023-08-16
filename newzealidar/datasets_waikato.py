@@ -14,8 +14,8 @@ import pandas as pd
 from fiona.drvsupport import supported_drivers
 from sqlalchemy.engine import Engine
 
-from src import utils
-from src.tables import DATASET, create_table, get_max_value, check_table_duplication
+from newzealidar import utils
+from newzealidar.tables import DATASET, create_table, get_max_value, check_table_duplication
 
 logger = logging.getLogger(__name__)
 
