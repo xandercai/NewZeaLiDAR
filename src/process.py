@@ -385,7 +385,7 @@ def run(catch_id: Union[int, str, list] = None,
                 logger.info(f'Catchment {i} is not within lidar extent, ignor it.')
             else:
                 logger.info(f'Catchment {i} already exist in hydro_dem table, ignor it.')
-
+        logger.info('\n\n')
     if len(failed):
         logger.info(f'Failed {len(failed)} catchments: \n{failed}')
 
