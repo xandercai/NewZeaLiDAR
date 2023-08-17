@@ -29,7 +29,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.engine import Engine
 
-from src import tables
+from newzealidar import tables
 
 logger = logging.getLogger(__name__)
 
@@ -547,7 +547,28 @@ def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]], filter_it:
     return gdf
 
 
-def check_dem_exist_by_id(engine: Engine, index) -> bool:
+def check_dem_exist_by_geometry(engine: Engine,
+                                geometry: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries]) -> int:
+    """
+    Check if the DEM file exists in the database by geometry
+    """
+    gdf = tables.get_within_catchment_by_geometry(engine, tables.DEMGEO, geometry, geo_col='instruction')
+    if gdf.empty:
+        index = -1
+        logger.info('Unable to find DEM by geometry in the database.')
+    else:
+        if len(gdf) == 1:
+            index = gdf['catch_id'].values[0]
+        else:
+            # multiple results, select the latest
+            gdf = gdf.sort_values(by='updated_at', ascending=False).reset_index(drop=True)
+            index = gdf['catch_id'].to_list()[0]
+        logger.info(f'Found DEM by geometry in the database, catch_id: {index}')
+    return index
+
+
+
+def check_dem_exist_by_id(engine: Engine, index: Union[int, str]) -> bool:
     """
     Check if the DEM file exists in the database by catch_id
     """

@@ -315,14 +315,27 @@ def run():
     """Run the module."""
     crawl_dataset()
     rename_file()
+    instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
+    # generate dataset mapping info
+    engine = utils.get_database()
+    utils.map_dataset_name(engine, instructions_file)
+    engine.dispose()
+    gc.collect()
     logger.info('Finish processing datasets by scrapy.')
 
 
 # for Digital-Twins
-def main():
+def main(gdf=None, log_level='INFO'):
     """Run the module."""
+    logger.setLevel(log_level)
     crawl_dataset()
     rename_file()
+    instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
+    # generate dataset mapping info
+    engine = utils.get_database()
+    utils.map_dataset_name(engine, instructions_file)
+    engine.dispose()
+    gc.collect()
     logger.info('Finish processing datasets by scrapy.')
 
 

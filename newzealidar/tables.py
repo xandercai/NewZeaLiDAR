@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.engine import Engine
 
-from src import utils
+from newzealidar import utils
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,17 @@ class DEM(Base):
     extent_path = Column(String, comment='DEM extent file path')
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
+
+
+# for Digital-Twins
+class DEMGEO(Base):
+    __tablename__: str = "hydro_dem_geometry"
+    catch_id = Column(Integer, primary_key=True, comment='selected area index')  # catchment region id
+    instruction = Column(Geometry("Geometry", srid="2193"), comment='instruction extent geometry')
+    geometry = Column(Geometry("Geometry", srid="2193"), comment='DEM extent geometry')
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
 
 
 # define sea draining catchments table
@@ -462,6 +473,7 @@ def get_adjacent_catchment_by_id(engine: Engine,
 def get_within_catchment_by_geometry(engine: Engine,
                                      table: Union[str, Type[Ttable]],
                                      geom: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries, pd.Series],
+                                     geo_col: str = 'geometry',
                                      buffer: Union[int, float] = -CATCHMENT_RESOLUTION*2-EPS,
                                      desc: bool = None) -> gpd.GeoDataFrame:
     """
@@ -478,23 +490,22 @@ def get_within_catchment_by_geometry(engine: Engine,
         table = table.__tablename__
     index = None
     if isinstance(geom, (gpd.GeoSeries, pd.Series)):
-        assert len(geom.to_frame().T) == 1, f"Only one geometry is allowed, {type(geom)} \n{geom.to_string()}."
-        index = geom['catch_id']
-        geom = geom['geometry']
+        geom = geom.to_frame().T
     if isinstance(geom, gpd.GeoDataFrame):
-        assert len(geom) == 1, f"Only one geometry is allowed, {type(geom)} \n{geom.to_string()}."
-        index = geom['catch_id'].values[0]
+        assert len(geom) == 1, f"Only one geometry is allowed, {geom.to_string()}."
+        if 'catch_id' in geom.columns:
+            index = geom['catch_id']
         geom = geom['geometry'].values[0]
     geom = shapely.buffer(geom, buffer, join_style='mitre') if buffer != 0 else geom
     if desc is None or index is None:
         query = f"""SELECT * FROM {table}
-                    WHERE ST_Contains(geometry, ST_SetSRID('{geom}'::geometry, 2193)) ;"""
+                    WHERE ST_Contains({geo_col}, ST_SetSRID('{geom}'::geometry, 2193)) ;"""
     elif desc:
         query = f"""SELECT * FROM {table}
-                    WHERE ST_Contains(geometry, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id <= {index} ;"""
+                    WHERE ST_Contains({geo_col}, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id <= {index} ;"""
     else:
         query = f"""SELECT * FROM {table}
-                    WHERE ST_Contains(geometry, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id >= {index} ;"""
+                    WHERE ST_Contains({geo_col}, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id >= {index} ;"""
     return gpd.read_postgis(query, engine, geom_col='geometry')
 
 

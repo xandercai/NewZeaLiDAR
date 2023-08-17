@@ -9,7 +9,6 @@ Prerequisites:
 * lidar and tile files and tables is ready: run lidar module to download lidar data and save to local database.
 """
 import gc
-import time
 import json
 import logging
 import os
@@ -22,7 +21,7 @@ import pandas as pd
 from sqlalchemy.engine import Engine
 
 from newzealidar import utils
-from newzealidar.tables import (Ttable, SDC, CATCHMENT, DEM, DATASET, create_table,
+from newzealidar.tables import (Ttable, SDC, CATCHMENT, DEM, DEMGEO, DATASET, create_table,
                                 get_data_by_id, get_split_catchment_by_id, get_id_under_area, check_table_duplication)
 
 # if we use Fork GeoFabrics to fix GeoFabrics' issues:
@@ -65,7 +64,8 @@ def gen_instructions(engine: Engine,
                      mode: str = 'api',
                      buffer: Union[int, float] = 0) -> dict:
     """Read basic instruction file and adds keys and uses geojson as catchment_boundary"""
-    instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
+    if instructions["instructions"]["processing"].get("number_of_cores") is None:
+        instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
     data_dir = pathlib.PurePosixPath(utils.get_env_variable("DATA_DIR"))
     dem_dir = pathlib.PurePosixPath(utils.get_env_variable("DEM_DIR"))
     index_dir = pathlib.PurePosixPath(str(index))
@@ -79,8 +79,8 @@ def gen_instructions(engine: Engine,
     instructions["instructions"]["data_paths"]["raw_dem"] = f'{index}_raw_dem.nc'
     instructions["instructions"]["data_paths"]["raw_dem_extents"] = f'{index}_raw_extents.geojson'
     instructions["instructions"]["data_paths"]["catchment_boundary"] = f'{index}.geojson'
-    if utils.get_env_variable("LAND_FILE") is not None:
-        # cwd is in dem_dir: datastorage/HydroDEM/index
+    if utils.get_env_variable("LAND_FILE", allow_empty=True) is not '':
+        # cwd is in dem_dir: datastorage/hydro_dem/index
         instructions["instructions"]["data_paths"]["land"] = str(
             f"../../{str(pathlib.PurePosixPath(utils.get_env_variable('LAND_FILE')))}"
         )
@@ -152,7 +152,7 @@ def single_process(engine: Engine,
     return single_instructions
 
 
-def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: dict) -> None:
+def store_hydro_to_db(engine: Engine, instructions: dict) -> None:
     """save hydrological conditioned dem to database in hydro table."""
     assert len(instructions) > 0, 'instructions is empty dictionary.'
     index = os.path.basename(instructions["instructions"]["data_paths"]["subfolder"])
@@ -167,24 +167,27 @@ def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: dict) -
     # {index}_raw_dem_extent.geojson
     raw_extent_path = str(dir_path /
                           pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem_extents"]))
+    instruction_extent_path = raw_extent_path.replace('_raw_extents', '')
     assert os.path.exists(raw_dem_path), f'File {raw_dem_path} not exist.'
     assert os.path.exists(result_dem_path), f'File {result_dem_path} not exist.'
     assert os.path.exists(raw_extent_path), f'File {raw_extent_path} not exist.'
+    assert os.path.exists(instruction_extent_path), f'File {instruction_extent_path} not exist.'
     timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %X')
-    create_table(engine, table)
-    query = f"SELECT * FROM {table.__tablename__} WHERE catch_id = '{index}' ;"
+    # hydrologically conditioned DEM table
+    create_table(engine, DEM)
+    query = f"SELECT * FROM {DEM.__tablename__} WHERE catch_id = '{index}' ;"
     df_from_db = pd.read_sql(query, engine)
     if not df_from_db.empty:
-        query = f"""UPDATE {table.__tablename__}
+        query = f"""UPDATE {DEM.__tablename__}
                     SET raw_dem_path = '{raw_dem_path}',
                         hydro_dem_path = '{result_dem_path}',
                         extent_path = '{raw_extent_path}',
                         updated_at = '{timestamp}'
                     WHERE catch_id = '{index}' ;"""
         engine.execute(query)
-        logger.info(f'Updated {index} in {table.__tablename__} at {timestamp}.')
+        logger.info(f'Updated {index} in {DEM.__tablename__} at {timestamp}.')
     else:
-        query = f"""INSERT INTO {table.__tablename__} (
+        query = f"""INSERT INTO {DEM.__tablename__} (
                     catch_id,
                     raw_dem_path,
                     hydro_dem_path,
@@ -200,16 +203,48 @@ def store_hydro_to_db(engine: Engine, table: Type[Ttable], instructions: dict) -
                     '{timestamp}'
                     ) ;"""
         engine.execute(query)
-        logger.info(f'Add new {index} in {table.__tablename__} at {timestamp}.')
+
+        # hydrologically conditioned DEM geometry table, to faster query
+        create_table(engine, DEMGEO)
+        instruction = gpd.read_file(instruction_extent_path, Driver='GeoJSON').geometry[0]
+        geometry = gpd.read_file(raw_extent_path, Driver='GeoJSON').geometry[0]
+        query = f"SELECT catch_id FROM {DEMGEO.__tablename__} WHERE catch_id = '{index}' ;"
+        df_from_db = pd.read_sql(query, engine)
+        if not df_from_db.empty:
+            query = f"""UPDATE {DEMGEO.__tablename__}
+                        SET instruction = '{instruction}'
+                            geometry = '{geometry}',
+                            updated_at = '{timestamp}'
+                        WHERE catch_id = '{index}' ;"""
+            engine.execute(query)
+            logger.info(f'Updated {index} in {DEMGEO.__tablename__} at {timestamp}.')
+        else:
+            query = f"""INSERT INTO {DEMGEO.__tablename__} (
+                        catch_id,
+                        instruction,
+                        geometry,
+                        created_at,
+                        updated_at
+                        ) VALUES (
+                        {index},
+                        '{instruction}',
+                        '{geometry}',
+                        '{timestamp}',
+                        '{timestamp}'
+                        ) ;"""
+            engine.execute(query)
+        logger.info(f'Add new {index} in {DEMGEO.__tablename__} at {timestamp}.')
     # check_table_duplication(engine, table, 'catch_id')
 
 
 # for Digital-Twins
-def main(index: Union[int, str],
-            catchment_boundary: Union[gpd.GeoDataFrame, str],
-            buffer: Union[int, float] = 0) -> None:
+def main(catchment_boundary: Union[gpd.GeoDataFrame, str],
+         log_level = 'INFO',
+         index: Union[int, str, None] = None,
+         buffer: Union[int, float] = 14
+         ) -> None:
     """
-    Run the hydrological conditioned dem generation process for a single catchment.
+    Run the hydrological conditioned dem generation process for a single catchment in API mode.
 
     Parameters
     ----------
@@ -221,7 +256,11 @@ def main(index: Union[int, str],
     buffer : Union[int, float], optional
         The buffer distance of the catchment boundary, by default 0.
     """
-    assert isinstance(index, (int, str)), f'Catchment index {index} is not digit or string.'
+    logger.setLevel(log_level)
+
+    if index is None:
+        index = f'{datetime.now():%Y%m%d%H%M%S}'[-10:]  # integer range up to 2,147,483,647
+        logger.info(f'Input index is None, use {index} as catchment index.')
     if isinstance(index, str):
         assert index.isdigit(), f'Catchment index {index} is not digit.'
     logger.info(f'Start Catchment {index} processing...')
@@ -254,7 +293,7 @@ def main(index: Union[int, str],
         try:
             single_instructions = single_process(engine, instructions, index, mode='api', buffer=buffer)
             if single_instructions:
-                store_hydro_to_db(engine, DEM, single_instructions)
+                store_hydro_to_db(engine, single_instructions)
                 logger.info(f'Catchment {index} finished.')
             else:
                 logger.warning(f'Catchment {index} failed. No instructions generated. Please check.')
@@ -293,8 +332,6 @@ def run(catch_id: Union[int, str, list] = None,
     dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
     catch_path = data_dir / dem_dir
     instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
-    # generate dataset mapping info
-    utils.map_dataset_name(engine, instructions_file)
     with open(instructions_file, 'r') as f:
         instructions = json.loads(f.read())
 
@@ -369,7 +406,7 @@ def run(catch_id: Union[int, str, list] = None,
                 continue
             t_end = datetime.now()
             if single_instructions:
-                store_hydro_to_db(engine, DEM, single_instructions)
+                store_hydro_to_db(engine, single_instructions)
             else:
                 logger.error(f'Catchment {i} failed. No instructions generated. Please check.')
                 failed.append(i)

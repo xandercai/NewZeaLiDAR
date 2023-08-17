@@ -12,6 +12,6 @@ Modules:
     * utils: utility functions for the package.
 """
 
-from src import version
+from newzealidar import version
 
 __version__ = version.__version__
