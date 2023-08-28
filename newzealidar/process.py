@@ -21,7 +21,7 @@ import pandas as pd
 from sqlalchemy.engine import Engine
 
 from newzealidar import utils
-from newzealidar.tables import (Ttable, SDC, CATCHMENT, DEM, DEMGEO, DATASET, create_table,
+from newzealidar.tables import (Ttable, SDC, CATCHMENT, DEM, DEMATTR, DATASET, create_table,
                                 get_data_by_id, get_split_catchment_by_id, get_id_under_area, check_table_duplication)
 
 # if we use Fork GeoFabrics to fix GeoFabrics' issues:
@@ -205,35 +205,39 @@ def store_hydro_to_db(engine: Engine, instructions: dict) -> None:
         engine.execute(query)
 
         # hydrologically conditioned DEM geometry table, to faster query
-        create_table(engine, DEMGEO)
-        instruction = gpd.read_file(instruction_extent_path, Driver='GeoJSON').geometry[0]
+        create_table(engine, DEMATTR)
+        resolution = instructions["instructions"]["output"]["grid_params"]["resolution"]
+        raw_geometry = gpd.read_file(instruction_extent_path, Driver='GeoJSON').geometry[0]
         geometry = gpd.read_file(raw_extent_path, Driver='GeoJSON').geometry[0]
-        query = f"SELECT catch_id FROM {DEMGEO.__tablename__} WHERE catch_id = '{index}' ;"
+        query = f"SELECT catch_id FROM {DEMATTR.__tablename__} WHERE catch_id = '{index}' ;"
         df_from_db = pd.read_sql(query, engine)
         if not df_from_db.empty:
-            query = f"""UPDATE {DEMGEO.__tablename__}
-                        SET instruction = '{instruction}'
+            query = f"""UPDATE {DEMATTR.__tablename__}
+                        SET raw_geometry = '{raw_geometry}'
+                            resolution = '{resolution}',
                             geometry = '{geometry}',
                             updated_at = '{timestamp}'
                         WHERE catch_id = '{index}' ;"""
             engine.execute(query)
-            logger.info(f'Updated {index} in {DEMGEO.__tablename__} at {timestamp}.')
+            logger.info(f'Updated {index} in {DEMATTR.__tablename__} at {timestamp}.')
         else:
-            query = f"""INSERT INTO {DEMGEO.__tablename__} (
+            query = f"""INSERT INTO {DEMATTR.__tablename__} (
                         catch_id,
-                        instruction,
+                        raw_geometry,
+                        resolution,
                         geometry,
                         created_at,
                         updated_at
                         ) VALUES (
                         {index},
-                        '{instruction}',
+                        '{raw_geometry}',
+                        '{resolution}',
                         '{geometry}',
                         '{timestamp}',
                         '{timestamp}'
                         ) ;"""
             engine.execute(query)
-        logger.info(f'Add new {index} in {DEMGEO.__tablename__} at {timestamp}.')
+        logger.info(f'Add new {index} in {DEMATTR.__tablename__} at {timestamp}.')
     # check_table_duplication(engine, table, 'catch_id')
 
 

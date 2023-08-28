@@ -2,32 +2,29 @@
 """
 This module contains utility functions for the package.
 """
-import gc
-import shutil
-import time
 import json
-import shapely
 import logging
 import os
 import pathlib
-from fnmatch import fnmatch
-import pygeos  # for drop z
-from typing import Type, TypeVar, Union
-from datetime import datetime, timedelta
+import shutil
 from collections import OrderedDict
-from shapely.geometry import MultiPolygon, Polygon, GeometryCollection, box
-from shapely import unary_union
-import xarray as xr
-import rioxarray as rxr
+from datetime import datetime
+from fnmatch import fnmatch
+from typing import Type, TypeVar, Union
 
 import geojson
 import geopandas as gpd
 import pandas as pd
+import rioxarray as rxr
+import shapely
+import xarray as xr
 from dotenv import load_dotenv
+from shapely import unary_union
+from shapely.geometry import MultiPolygon, Polygon, GeometryCollection, box
 from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.engine import Engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.pool import NullPool
 
 from newzealidar import tables
 
@@ -144,12 +141,14 @@ def get_engine(db: str, user: str, host: str, port: str, password: str,
 
 def timeit(f):
     """timer decorator"""
+
     def wrapper(*args, **kwargs):
         start = datetime.now()
         result = f(*args, **kwargs)
         span = datetime.now() - start
         logging.info(f"\n*** TIME IT ***\n{f.__name__} runtime: {span}\n***************")
         return result
+
     return wrapper
 
 
@@ -233,7 +232,7 @@ def map_dataset_name(engine: Engine, instructions_file: Union[str, pathlib.Path]
         instructions = json.load(f)
         if not instructions["instructions"].get("dataset_mapping"):
             instructions["instructions"]["dataset_mapping"] = {"lidar": {}}
-        instructions["instructions"]["dataset_mapping"]["lidar"] = dict(zip(df['name'], df.index+1))
+        instructions["instructions"]["dataset_mapping"]["lidar"] = dict(zip(df['name'], df.index + 1))
         instructions["instructions"]["dataset_mapping"]["lidar"]["Unknown"] = 0
     with open(instructions_file, 'w') as f:
         json.dump(instructions, f, indent=2)
@@ -380,7 +379,8 @@ def retrieve_catchment(engine: Engine, boundary_file: Union[str, pathlib.Path], 
     return catch_list
 
 
-def retrieve_dem(engine: Engine, boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0) -> pd.DataFrame:
+def retrieve_dem(engine: Engine, boundary_file: Union[str, pathlib.Path],
+                 buffer: Union[int, float] = 0) -> pd.DataFrame:
     """
     Read boundary geometry boundary_file,
     Query dataset to get file path which covers the geometry based on the boundary geometry,
@@ -454,7 +454,7 @@ def filter_geometry(geometry: Union[shapely.Geometry, Polygon, MultiPolygon, Geo
         geometry = MultiPolygon([p for p in geometry.geoms if p.area > polygon_threshold])
     # remove spikes
     geometry = (geometry.buffer(-EPS, join_style='mitre').
-                buffer(EPS*2, join_style='mitre').
+                buffer(EPS * 2, join_style='mitre').
                 buffer(-EPS, join_style='mitre'))
     # clean geometry boundary
     eps = resolution / 2 - EPS
@@ -481,9 +481,9 @@ def fishnet(geometry: shapely.geometry, threshold: Union[int, float]) -> list:
     # ncols = int(xmax - xmin + 1)
     # nrows = int(ymax - ymin + 1)
     result = []
-    for i in range(xmin, xmax+1):
-        for j in range(ymin, ymax+1):
-            b = box(i*threshold, j*threshold, (i+1)*threshold, (j+1)*threshold)
+    for i in range(xmin, xmax + 1):
+        for j in range(ymin, ymax + 1):
+            b = box(i * threshold, j * threshold, (i + 1) * threshold, (j + 1) * threshold)
             g = geometry.intersection(b)
             if g.is_empty:
                 continue
@@ -503,12 +503,12 @@ def katana(geometry: shapely.geometry, threshold: Union[int, float], count: int 
         return [geometry]
     if height >= width:
         # split left to right
-        a = box(bounds[0], bounds[1], bounds[2], bounds[1]+height/2)
-        b = box(bounds[0], bounds[1]+height/2, bounds[2], bounds[3])
+        a = box(bounds[0], bounds[1], bounds[2], bounds[1] + height / 2)
+        b = box(bounds[0], bounds[1] + height / 2, bounds[2], bounds[3])
     else:
         # split top to bottom
-        a = box(bounds[0], bounds[1], bounds[0]+width/2, bounds[3])
-        b = box(bounds[0]+width/2, bounds[1], bounds[2], bounds[3])
+        a = box(bounds[0], bounds[1], bounds[0] + width / 2, bounds[3])
+        b = box(bounds[0] + width / 2, bounds[1], bounds[2], bounds[3])
     result = []
     for d in (a, b,):
         c = geometry.intersection(d)
@@ -516,7 +516,7 @@ def katana(geometry: shapely.geometry, threshold: Union[int, float], count: int 
             c = [c]
         for e in c:
             if isinstance(e, (Polygon, MultiPolygon)):
-                result.extend(katana(e, threshold, count+1))
+                result.extend(katana(e, threshold, count + 1))
     if count > 0:
         return result
     # convert multipart into single part
@@ -547,14 +547,14 @@ def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]], filter_it:
     return gdf
 
 
-def check_dem_exist_by_geometry(engine: Engine,
-                                geometry: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries]) -> int:
+def get_dem_attr_by_geometry(engine: Engine,
+                             geometry: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries],
+                             geom_col: str = 'raw_geometry') -> gpd.GeoDataFrame:
     """
-    Check if the DEM file exists in the database by geometry
+    get DEM attribute by geometry
     """
-    gdf = tables.get_within_catchment_by_geometry(engine, tables.DEMGEO, geometry, geo_col='instruction')
+    gdf = tables.get_within_catchment_by_geometry(engine, tables.DEMATTR, geometry, geom_col=geom_col)
     if gdf.empty:
-        index = -1
         logger.info('Unable to find DEM by geometry in the database.')
     else:
         if len(gdf) == 1:
@@ -564,33 +564,76 @@ def check_dem_exist_by_geometry(engine: Engine,
             gdf = gdf.sort_values(by='updated_at', ascending=False).reset_index(drop=True)
             index = gdf['catch_id'].to_list()[0]
         logger.info(f'Found DEM by geometry in the database, catch_id: {index}')
-    return index
+    return gdf
 
 
-
-def check_dem_exist_by_id(engine: Engine, index: Union[int, str]) -> bool:
+def get_dem_by_id(engine: Engine, index: Union[int, str]) -> pd.DataFrame:
     """
-    Check if the DEM file exists in the database by catch_id
+    get DEM file path by catch_id
     """
-    result = True
     query = f"SELECT * FROM hydro_dem WHERE catch_id = {index} ;"
     df = pd.read_sql(query, engine)
     if df.empty:
-        result = False
+        logger.info(f'Unable to find DEM by catch_id {index} in the database.')
     else:
         hydro_dem_path = df['hydro_dem_path'].values[0]
         raw_dem_path = df['raw_dem_path'].values[0]
         extent_path = df['extent_path'].values[0]
         if not pathlib.Path(hydro_dem_path).exists():
             logging.debug(f'Expected Hydro DEM File {hydro_dem_path} does not exist.')
-            result = False
         if not pathlib.Path(raw_dem_path).exists():
             logging.debug(f'Expected Raw DEM File {raw_dem_path} does not exist.')
-            result = False
         if not pathlib.Path(extent_path).exists():
             logging.debug(f'Expected Extent File {extent_path} does not exist.')
-            result = False
-    return result
+    return df
+
+
+def get_dem_by_geometry(engine: Engine,
+                        geometry: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries]) -> tuple:
+    """
+    get DEM file path by geometry
+    """
+    hydro_dem_path = ''
+    raw_dem_path = ''
+    extent_path = ''
+    resolution = -1
+    gdf = get_dem_attr_by_geometry(engine, geometry)
+    if not gdf.empty:
+        index = gdf['catch_id'].values[0]
+        df = get_dem_by_id(engine, index)
+        if not df.empty:
+            raw_dem_path = df['raw_dem_path'].values[0]
+            hydro_dem_path = df['hydro_dem_path'].values[0]
+            extent_path = df['extent_path'].values[0]
+            resolution = gdf['resolution'].values[0]
+    return hydro_dem_path, raw_dem_path, extent_path, resolution
+
+
+def get_dem_band_and_resolution_by_geometry(
+        engine: Engine,
+        geometry: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries],
+        band: int = 1
+) -> tuple:
+    """
+    get DEM raster data band and resolution by geometry
+    """
+    dem_path, _, _, _ = get_dem_by_geometry(engine, geometry)
+
+    # Open the Hydro DEM using rioxarray
+    with rxr.open_rasterio(pathlib.Path(dem_path)) as f:
+        # Select the first band of the Hydro DEM
+        hydro_dem = f.sel(band=band)
+        # Get the unique resolution from the Hydro DEM
+        unique_resolution = list(set(abs(res) for res in hydro_dem.rio.resolution()))
+        # Check if there is only one unique resolution
+        res_no = unique_resolution[0] if len(unique_resolution) == 1 else None
+        # Get the resolution from the Hydro DEM description
+        res_description = int(hydro_dem.description.split()[-1])
+        # Check if the resolution from the metadata matches the actual resolution
+        if res_no != res_description:
+            raise ValueError("Inconsistent resolution between metadata and actual resolution of the Hydro DEM.")
+        else:
+            return hydro_dem, res_no
 
 
 def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
@@ -662,7 +705,7 @@ def get_netcdf_in_polygon(engine,
         else:
             logger.warning(f'Expected Hydro DEM File {file} does not exist.')
     print(list_xds)
-    xds = xr.combine_by_coords(list_xds, combine_attrs='drop',  compat='no_conflicts')
+    xds = xr.combine_by_coords(list_xds, combine_attrs='drop', compat='no_conflicts')
     # xds = xr.combine_by_coords(list_xds)
     xds = xds.rio.write_crs(2193)
     print(xds)

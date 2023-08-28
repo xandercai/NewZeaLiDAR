@@ -111,10 +111,11 @@ class DEM(Base):
 
 
 # for Digital-Twins
-class DEMGEO(Base):
-    __tablename__: str = "hydro_dem_geometry"
+class DEMATTR(Base):
+    __tablename__: str = "hydro_dem_attribute"
     catch_id = Column(Integer, primary_key=True, comment='selected area index')  # catchment region id
-    instruction = Column(Geometry("Geometry", srid="2193"), comment='instruction extent geometry')
+    resolution = Column(Integer, comment='DEM resolution in meters')
+    raw_geometry = Column(Geometry("Geometry", srid="2193"), comment='instruction extent geometry')
     geometry = Column(Geometry("Geometry", srid="2193"), comment='DEM extent geometry')
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
@@ -473,7 +474,7 @@ def get_adjacent_catchment_by_id(engine: Engine,
 def get_within_catchment_by_geometry(engine: Engine,
                                      table: Union[str, Type[Ttable]],
                                      geom: Union[shapely.Geometry, gpd.GeoDataFrame, gpd.GeoSeries, pd.Series],
-                                     geo_col: str = 'geometry',
+                                     geom_col: str = 'geometry',
                                      buffer: Union[int, float] = -CATCHMENT_RESOLUTION*2-EPS,
                                      desc: bool = None) -> gpd.GeoDataFrame:
     """
@@ -482,6 +483,7 @@ def get_within_catchment_by_geometry(engine: Engine,
     :param engine: sqlalchemy engine
     :param table: table name or object to query
     :param geom: shapely geometry, dataframe or series to be checked
+    :param geom_col: geometry column name in the table
     :param buffer: buffer distance to be applied to the geometry in the table
     :param desc: None - both side, False - only check index larger than input index, True - only check smaller index
     :return: GeoDataFrame
@@ -499,14 +501,14 @@ def get_within_catchment_by_geometry(engine: Engine,
     geom = shapely.buffer(geom, buffer, join_style='mitre') if buffer != 0 else geom
     if desc is None or index is None:
         query = f"""SELECT * FROM {table}
-                    WHERE ST_Contains({geo_col}, ST_SetSRID('{geom}'::geometry, 2193)) ;"""
+                    WHERE ST_Contains({geom_col}, ST_SetSRID('{geom}'::geometry, 2193)) ;"""
     elif desc:
         query = f"""SELECT * FROM {table}
-                    WHERE ST_Contains({geo_col}, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id <= {index} ;"""
+                    WHERE ST_Contains({geom_col}, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id <= {index} ;"""
     else:
         query = f"""SELECT * FROM {table}
-                    WHERE ST_Contains({geo_col}, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id >= {index} ;"""
-    return gpd.read_postgis(query, engine, geom_col='geometry')
+                    WHERE ST_Contains({geom_col}, ST_SetSRID('{geom}'::geometry, 2193)) AND catch_id >= {index} ;"""
+    return gpd.read_postgis(query, engine, geom_col=geom_col)
 
 
 def read_postgres_table(engine: Engine, table: Union[str, Type[Ttable]], limit: int = 0) -> pd.DataFrame:
