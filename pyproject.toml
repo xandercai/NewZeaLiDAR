@@ -40,7 +40,7 @@ dependencies = [
     "geoalchemy2",
     "laspy",
     "geoapis",
-    "geofabrics",
+    "geofabrics<=0.10.23",
     'tomli; python_version >= "3.11"',
 ]
 requires-python = ">=3.11"
