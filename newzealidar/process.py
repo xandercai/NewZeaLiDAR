@@ -13,7 +13,6 @@ import json
 import logging
 import os
 import pathlib
-import sys
 from datetime import datetime, timedelta
 from typing import Union, Type
 import geopandas as gpd
@@ -23,21 +22,9 @@ from sqlalchemy.engine import Engine
 from newzealidar import utils
 from newzealidar.tables import (Ttable, SDC, CATCHMENT, DEM, DEMATTR, DATASET, create_table,
                                 get_data_by_id, get_split_catchment_by_id, get_id_under_area, check_table_duplication)
-
-# if we use Fork GeoFabrics to fix GeoFabrics' issues:
-# sys.path.insert(0, str(pathlib.Path(r'../ForkGeoFabrics/src/geofabrics')))
-# otherwise:
 from geofabrics import processor
 
 logger = logging.getLogger(__name__)
-
-
-# # for dask, set check time to 3 hours (or other appropriate value) to eliminate overwhelming warning like:
-# #     distributed.core - INFO - Event loop was unresponsive in Worker for 3.90s.
-# #     This is often caused by long-running GIL-holding functions or moving large chunks of data.
-# #     This can cause timeouts and instability.
-# os.environ["DASK_DISTRIBUTED__ADMIN__TICK__LIMIT"] = "3h"
-# print("DASK_DISTRIBUTED__ADMIN__TICK__LIMIT = ", os.environ["DASK_DISTRIBUTED__ADMIN__TICK__LIMIT"])
 
 
 def save_instructions(instructions: dict, instructions_path: str) -> None:
