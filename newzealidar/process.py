@@ -264,6 +264,7 @@ def main(catchment_boundary: Union[gpd.GeoDataFrame, str],
         catchment_boundary = gpd.read_file(catchment_boundary, driver='GeoJSON')
 
     if check_dem_exist:
+        create_table(engine, DEMATTR)
         # check if catchment already exist in hydro_dem table, pass
         gdf = utils.get_dem_attr_by_geometry(engine, catchment_boundary)
         if not gdf.empty:

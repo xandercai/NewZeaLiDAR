@@ -384,9 +384,11 @@ def deduplicate_table(engine: Engine,
     engine.execute(query)
 
 
-# not used due to create_table will check table first.
-def is_table_exist(engine: Engine, table: str):
+# not used due to create table will do the same work
+def is_table_exist(engine: Engine, table: Union[Type[Ttable], str]):
     """Check table if it exists."""
+    if not isinstance(table, str):
+        table = table.__tablename__
     return inspect(engine).has_table(table)
 
 
