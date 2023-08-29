@@ -245,6 +245,7 @@ def store_hydro_to_db(engine: Engine, instructions: dict) -> None:
 def main(catchment_boundary: Union[gpd.GeoDataFrame, str],
          log_level = 'INFO',
          index: Union[int, str, None] = None,
+         check_dem_exist: bool = True,
          buffer: Union[int, float] = 14
          ) -> None:
     """
@@ -274,6 +275,13 @@ def main(catchment_boundary: Union[gpd.GeoDataFrame, str],
     result_dir = data_dir / dem_dir
     if isinstance(catchment_boundary, str):
         catchment_boundary = gpd.read_file(catchment_boundary, driver='GeoJSON')
+
+    if check_dem_exist:
+        # check if catchment already exist in hydro_dem table, pass
+        gdf = utils.get_dem_attr_by_geometry(engine, catchment_boundary)
+        if not gdf.empty:
+            logger.info(f'Catchment {index} already exist in hydro_dem table, ignor it.')
+            return
 
     lidar_extent_file = (
             pathlib.Path(utils.get_env_variable('DATA_DIR')) /
