@@ -18,8 +18,8 @@ import shapely
 from geoapis.vector import WfsQueryBase
 from sqlalchemy.engine import Engine
 
-from src import tables
-from src import utils
+from newzealidar import tables
+from newzealidar import utils
 
 logger = logging.getLogger(__name__)
 

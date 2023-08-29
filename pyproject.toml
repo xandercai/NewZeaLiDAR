@@ -23,7 +23,7 @@ classifiers = [
 keywords = ["NewZeaLiDAR", "DEM", "Hydrologically conditioned", "LiDAR"]
 dependencies = [
     "dask",
-    "distributed",
+    "bokeh!=3.0.*,>=2.4.2",
     "gdal",
     "pdal",
     "geopandas",

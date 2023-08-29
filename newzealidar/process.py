@@ -66,7 +66,7 @@ def gen_instructions(engine: Engine,
     instructions["instructions"]["data_paths"]["raw_dem"] = f'{index}_raw_dem.nc'
     instructions["instructions"]["data_paths"]["raw_dem_extents"] = f'{index}_raw_extents.geojson'
     instructions["instructions"]["data_paths"]["catchment_boundary"] = f'{index}.geojson'
-    if utils.get_env_variable("LAND_FILE", allow_empty=True) is not '':
+    if utils.get_env_variable("LAND_FILE", allow_empty=True) != '':
         # cwd is in dem_dir: datastorage/hydro_dem/index
         instructions["instructions"]["data_paths"]["land"] = str(
             f"../../{str(pathlib.PurePosixPath(utils.get_env_variable('LAND_FILE')))}"

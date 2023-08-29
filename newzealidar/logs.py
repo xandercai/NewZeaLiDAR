@@ -11,7 +11,7 @@ import logging
 import logging.config
 import warnings
 
-from src import utils
+from newzealidar import utils
 
 
 class FilterRecords(logging.Filter):
