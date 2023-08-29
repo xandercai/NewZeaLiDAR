@@ -1,0 +1,55 @@
+[build-system]
+requires = [
+    "setuptools>=61.0.0",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "newzealidar"
+version = "0.0.1"
+description = "A package for creating high-resolution DEM derived from LiDAR datasets of New Zealand."
+readme = "README.md"
+authors = [{ name = "Xander Cai", email = "xandcai@gmail.com" }]
+license = { file = "LICENSE" }
+classifiers = [
+    "Development Status :: 1 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+keywords = ["NewZeaLiDAR", "DEM", "Hydrologically conditioned", "LiDAR"]
+dependencies = [
+    "dask",
+    "distributed",
+    "gdal",
+    "pdal",
+    "geopandas",
+    "geojson",
+    "pygeos",
+    "shapely>=2.0",
+    "rasterio",
+    "rioxarray",
+    "netcdf4",
+    "scrapy",
+    "psycopg2",
+    "sqlalchemy<2.0",
+    "geoalchemy2",
+    "laspy",
+    "geoapis",
+    "geofabrics",
+    'tomli; python_version >= "3.11"',
+]
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = ["newzealidar"]
+
+[project.optional-dependencies]
+dev = ["black", "check-manifest", "python-dotenv", "pip-tools", "pytest"]
+
+[project.urls]
+Homepage = "https://github.com/xandercai/NewZeaLiDAR"
+Documentation = "https://xandercai.github.io/NewZeaLiDAR/"
