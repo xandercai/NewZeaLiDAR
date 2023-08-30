@@ -266,9 +266,9 @@ def main(catchment_boundary: Union[gpd.GeoDataFrame, str],
     if check_dem_exist:
         create_table(engine, DEMATTR)
         # check if catchment already exist in hydro_dem table, pass
-        gdf = utils.get_dem_attr_by_geometry(engine, catchment_boundary)
-        if not gdf.empty:
-            logger.info(f'Catchment {index} already exist in hydro_dem table, ignor it.')
+        _gdf = utils.get_dem_attr_by_geometry(engine, catchment_boundary)
+        if not _gdf.empty:
+            logger.info(f'Catchment {index} already exist in hydro_dem table, ignore it.')
             return
 
     lidar_extent_file = (

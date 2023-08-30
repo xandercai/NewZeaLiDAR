@@ -602,10 +602,10 @@ def get_dem_by_geometry(engine: Engine,
         index = gdf['catch_id'].values[0]
         df = get_dem_by_id(engine, index)
         if not df.empty:
-            raw_dem_path = df['raw_dem_path'].values[0]
-            hydro_dem_path = df['hydro_dem_path'].values[0]
-            extent_path = df['extent_path'].values[0]
-            resolution = gdf['resolution'].values[0]
+            raw_dem_path = pathlib.Path(df['raw_dem_path'].values[0])
+            hydro_dem_path = pathlib.Path(df['hydro_dem_path'].values[0])
+            extent_path = pathlib.Path(df['extent_path'].values[0])
+            resolution = int(gdf['resolution'].values[0])
     return hydro_dem_path, raw_dem_path, extent_path, resolution
 
 
