@@ -609,7 +609,7 @@ def get_catchment_by_geometry(
     index = None
     if isinstance(geom, (gpd.GeoSeries, pd.Series)):
         geom = geom.to_frame().T
-    if isinstance(geom, gpd.GeoDataFrame):
+    if isinstance(geom, (gpd.GeoDataFrame, pd.DataFrame)):
         assert len(geom) == 1, f"Only one geometry is allowed, {geom.to_string()}."
         if "catch_id" in geom.columns:
             index = geom["catch_id"]

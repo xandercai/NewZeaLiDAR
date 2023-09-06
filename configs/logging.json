@@ -7,7 +7,6 @@
       "datefmt": "%Y-%m-%d %H:%M:%S"
     }
   },
-
   "handlers": {
     "console": {
       "class": "logging.StreamHandler",
@@ -15,7 +14,6 @@
       "formatter": "standard",
       "stream": "ext://sys.stdout"
     },
-
     "info_file_handler": {
       "class": "logging.handlers.RotatingFileHandler",
       "level": "INFO",
@@ -25,7 +23,6 @@
       "backupCount": 20,
       "encoding": "utf8"
     },
-
     "error_file_handler": {
       "class": "logging.handlers.RotatingFileHandler",
       "level": "ERROR",
@@ -36,99 +33,124 @@
       "encoding": "utf8"
     }
   },
-
   "loggers": {
-
     "py.warnings": {
       "level": "ERROR",
-      "handlers": ["console"],
+      "handlers": [
+        "console"
+      ],
       "propagate": false
     },
-
     "distributed": {
       "level": "WARNING",
-      "handlers": ["console", "info_file_handler"],
+      "handlers": [
+        "info_file_handler"
+      ],
       "propagate": false
     },
-
     "distributed.client": {
       "level": "WARNING",
-      "handlers": ["console", "info_file_handler"],
+      "handlers": [
+        "info_file_handler"
+      ],
       "propagate": false
     },
-
     "distributed.worker": {
       "level": "WARNING",
-      "handlers": ["console", "info_file_handler"],
+      "handlers": [
+        "info_file_handler"
+      ],
       "propagate": false
     },
-
-    "distributed.utils_perf": {
-      "level": "WARNING",
-      "handlers": ["console"],
-      "propagate": false
-    },
-
     "scrapy": {
       "level": "WARNING",
-      "handlers": ["console"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.catchments": {
+    "newzealidar.catchments": {
       "level": "DEBUG",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.datasets": {
+    "newzealidar.datasets": {
       "level": "INFO",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.datasets_waikato": {
+    "newzealidar.datasets_waikato": {
       "level": "INFO",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.lidar": {
+    "newzealidar.lidar": {
       "level": "INFO",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.lidar_waikato": {
+    "newzealidar.lidar_waikato": {
       "level": "INFO",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.process": {
+    "newzealidar.process": {
       "level": "INFO",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.tables": {
+    "newzealidar.tables": {
       "level": "INFO",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     },
-
-    "src.utils": {
+    "newzealidar.utils": {
       "level": "INFO",
-      "handlers": ["console", "info_file_handler", "error_file_handler"],
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
       "propagate": false
     }
-
   },
-
   "root": {
     "level": "INFO",
-    "handlers": ["console", "info_file_handler", "error_file_handler"]
+    "handlers": [
+      "console",
+      "info_file_handler",
+      "error_file_handler"
+    ]
   },
-
   "captureWarnings": true
 }

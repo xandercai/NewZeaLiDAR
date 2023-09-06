@@ -557,7 +557,7 @@ def filter_geometry(
     :return: filtered geometry
     """
     # combine geometry if possible
-    if isinstance(geometry, gpd.GeoSeries):
+    if isinstance(geometry, (gpd.GeoSeries, pd.Series)):
         geometry = geometry.unary_union  # geopandas.GeoSeries.unary_union
     elif isinstance(geometry, (MultiPolygon, Polygon, GeometryCollection)):
         geometry = unary_union(geometry)  # shapely.unary_union
@@ -769,8 +769,8 @@ def get_dem_by_geometry(
     parameters
     ----------
     engine: sqlalchemy engine
-    geometry: shapely geometry, geopandas GeoDataFrame or GeoSeries
-    index: catchment id or name, default is None
+    geometry: ROI geometry (polygon of selected region of interest)
+    index: ROI id, default is None
     """
     hydro_dem_path = ""
     raw_dem_path = ""
@@ -779,7 +779,7 @@ def get_dem_by_geometry(
 
     if isinstance(geometry, (gpd.GeoSeries, pd.Series)):
         geometry = geometry.to_frame().T
-    if isinstance(geometry, gpd.GeoDataFrame):
+    if isinstance(geometry, (gpd.GeoDataFrame, pd.DataFrame)):
         assert (
             len(geometry) == 1
         ), f"Only one geometry is allowed, {geometry.to_string()}."
@@ -813,6 +813,12 @@ def get_dem_band_and_resolution_by_geometry(
 ) -> tuple:
     """
     get DEM raster data band and resolution by geometry
+
+    parameters
+    ----------
+    engine: sqlalchemy engine
+    geometry: ROI geometry (polygon of selected region of interest)
+    band: dataset band index, default is 1
     """
     dem_path, _, _, _ = get_dem_by_geometry(engine, geometry)
 
@@ -833,51 +839,6 @@ def get_dem_band_and_resolution_by_geometry(
             )
         else:
             return hydro_dem, res_no
-
-
-def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
-    """
-    Save source catchments to GPKG
-    """
-    gpkg_path = pathlib.Path(get_env_variable("DATA_DIR")) / pathlib.Path("gpkg")
-    if isinstance(file, str):
-        file_name = f"{file}.gpkg"
-    else:
-        file_name = f"{file.__tablename__}.gpkg"
-    pathlib.Path(gpkg_path).mkdir(parents=True, exist_ok=True)
-    gdf.set_crs(epsg=2193, inplace=True)
-    gdf.to_file(str(gpkg_path / pathlib.Path(file_name)), driver="GPKG")
-    logging.info(f"Save source catchments to {gpkg_path / pathlib.Path(file_name)}.")
-
-
-def make_valid(geometry: shapely.geometry) -> shapely.geometry:
-    """
-    Returns a valid representation of the object.
-    """
-    if geometry.is_valid:
-        return geometry
-    return shapely.make_valid(geometry)
-
-
-def get_min_width(geometry: shapely.geometry) -> float:
-    """
-    Get minimum width of the geometry
-    """
-    bounds = geometry.bounds
-    width = bounds[2] - bounds[0]
-    height = bounds[3] - bounds[1]
-    return min(width, height)
-
-
-def delete_dir(directory: Union[str, pathlib.Path]) -> None:
-    """
-    Delete directory
-    """
-    if isinstance(directory, str):
-        directory = pathlib.Path(directory)
-    if directory.exists():
-        shutil.rmtree(directory)
-        logger.info(f"Delete directory {directory}.")
 
 
 def clip_netcdf(
@@ -999,3 +960,48 @@ def clip_dem(
         tables.USERDEM.__tablename__, engine, if_exists="append", index=False
     )
     return gdf_to_db
+
+
+def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
+    """
+    Save source catchments to GPKG
+    """
+    gpkg_path = pathlib.Path(get_env_variable("DATA_DIR")) / pathlib.Path("gpkg")
+    if isinstance(file, str):
+        file_name = f"{file}.gpkg"
+    else:
+        file_name = f"{file.__tablename__}.gpkg"
+    pathlib.Path(gpkg_path).mkdir(parents=True, exist_ok=True)
+    gdf.set_crs(epsg=2193, inplace=True)
+    gdf.to_file(str(gpkg_path / pathlib.Path(file_name)), driver="GPKG")
+    logging.info(f"Save source catchments to {gpkg_path / pathlib.Path(file_name)}.")
+
+
+def make_valid(geometry: shapely.geometry) -> shapely.geometry:
+    """
+    Returns a valid representation of the object.
+    """
+    if geometry.is_valid:
+        return geometry
+    return shapely.make_valid(geometry)
+
+
+def get_min_width(geometry: shapely.geometry) -> float:
+    """
+    Get minimum width of the geometry
+    """
+    bounds = geometry.bounds
+    width = bounds[2] - bounds[0]
+    height = bounds[3] - bounds[1]
+    return min(width, height)
+
+
+def delete_dir(directory: Union[str, pathlib.Path]) -> None:
+    """
+    Delete directory
+    """
+    if isinstance(directory, str):
+        directory = pathlib.Path(directory)
+    if directory.exists():
+        shutil.rmtree(directory)
+        logger.info(f"Delete directory {directory}.")
