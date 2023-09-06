@@ -2,21 +2,20 @@
 """
 This module contains logging functions for the package.
 """
-import os
-import time
 import json
-import pathlib
-from typing import Union
 import logging
 import logging.config
+import os
+import pathlib
+import time
 import warnings
+from typing import Union
 
 from newzealidar import utils
 
 
 class FilterRecords(logging.Filter):
-
-    def __init__(self, name='', module='', func='', msg=''):
+    def __init__(self, name="", module="", func="", msg=""):
         super().__init__(name)
         # The name of the logger used to log the event represented by this LogRecord
         self.name = name
@@ -40,10 +39,10 @@ class FilterRecords(logging.Filter):
 
 
 def setup_logging(
-        default_path='logging.json',
-        default_level=None,
-        filter_warnings=True,
-        env_key='LOG_CFG'
+    default_path="logging.json",
+    default_level=None,
+    filter_warnings=True,
+    env_key="LOG_CFG",
 ):
     """
     Setup logging configuration
@@ -60,7 +59,7 @@ def setup_logging(
     if value:
         path = value
     if os.path.exists(path):
-        with open(path, 'rt') as f:
+        with open(path, "rt") as f:
             config = json.load(f)
         logging.config.dictConfig(config)
     elif default_level is not None:
@@ -69,17 +68,21 @@ def setup_logging(
         logging.basicConfig(level=logging.INFO)
 
     # add custom filters to the root logger
-    logging.getLogger().addFilter(FilterRecords(module='dem'))
+    logging.getLogger().addFilter(FilterRecords(module="dem"))
 
 
 def print_logger():
     loggers = [logging.getLogger()]  # get the root logger
-    loggers = loggers + [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+    loggers = loggers + [
+        logging.getLogger(name) for name in logging.root.manager.loggerDict
+    ]
     for i, l in enumerate(loggers):
         print(f"{i} - logger: {l.name} - level: {l.level}, handlers: {l.handlers}")
 
 
-def log_setup(module, log_dir: Union[str, pathlib.Path] = None, level=logging.DEBUG) -> None:
+def log_setup(
+    module, log_dir: Union[str, pathlib.Path] = None, level=logging.DEBUG
+) -> None:
     """
     Setup logging for the package.
     """
@@ -93,22 +96,19 @@ def log_setup(module, log_dir: Union[str, pathlib.Path] = None, level=logging.DE
     logging.disable(logging.NOTSET)
     logging.basicConfig(
         level=level,
-        format='%(asctime)s %(levelname)7s %(name)6s %(module)10s::%(funcName)12s> %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, mode='w'),
-            logging.StreamHandler()
-        ],
-        datefmt='%Y-%m-%d %H:%M:%S',
+        format="%(asctime)s %(levelname)7s %(name)6s %(module)10s::%(funcName)12s> %(message)s",
+        handlers=[logging.FileHandler(log_file, mode="w"), logging.StreamHandler()],
+        datefmt="%Y-%m-%d %H:%M:%S",
         encoding="utf-8",
         force=True,
     )
     logging.captureWarnings(True)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
-    logging.getLogger('fiona').propagate = False
-    logging.getLogger('urllib3').propagate = False
-    logging.getLogger('botocore').propagate = False
-    logging.getLogger('rasterio').propagate = False
-    logging.getLogger('boto3').propagate = False
-    logging.getLogger('asyncio').propagate = False
-    logging.getLogger('scrapy').propagate = False
-    logging.getLogger('distributed').propagate = False
+    logging.getLogger("fiona").propagate = False
+    logging.getLogger("urllib3").propagate = False
+    logging.getLogger("botocore").propagate = False
+    logging.getLogger("rasterio").propagate = False
+    logging.getLogger("boto3").propagate = False
+    logging.getLogger("asyncio").propagate = False
+    logging.getLogger("scrapy").propagate = False
+    logging.getLogger("distributed").propagate = False
