@@ -312,7 +312,7 @@ def main(
     index: Union[int, str, None] = None,
     check_dem_exist: bool = True,
     exit_if_error: bool = True,
-    buffer: Union[int, float] = 14,
+    buffer: Union[int, float] = 10,
 ) -> None:
     """
     Run the hydrological conditioned dem generation process for a single catchment in API mode.
@@ -328,7 +328,7 @@ def main(
     check_dem_exist : Default is True. If DEM is already exist in database, pass.
     exit_if_error: exit the process if there is an error.
     buffer : Union[int, float], optional
-        The buffer distance of the catchment boundary, by default 0.
+        The buffer distance of the catchment boundary, by default 10 metres.
     """
     logger.setLevel(log_level)
 
@@ -379,7 +379,7 @@ def main(
         )
         geojson_file.parent.mkdir(parents=True, exist_ok=True)
         if not pathlib.Path(geojson_file).exists():
-            utils.gen_boundary_file(result_dir, catchment_boundary, index, buffer)
+            utils.gen_boundary_file(result_dir, catchment_boundary, index)
         instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
         with open(instructions_file, "r") as f:
             instructions = json.loads(f.read())
@@ -426,7 +426,7 @@ def run(
         If mode is 'api', the lidar data will be downloaded from open topography.
         If mode is 'local', the lidar data will be downloaded from local directory.
     :param buffer: the catchment boundary buffer for safeguard catchment boundary,
-        default value is 10 meters.
+        default value is 10 metres.
     :param start: the start index of catchment in catchment table, for regression use.
     :param update: if True, run and update the existing dem in `hydro_dem` table, else pass if dem exist.
     :param gpkg: if True, save the hydrological conditioned dem as geopackage.
