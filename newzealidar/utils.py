@@ -262,7 +262,7 @@ def gen_boundary_file(
     generate boundary file based on the input geodataframe.
     Save to DATA_DIR/data_path/index/index.geojson.
     """
-    if buffer > 0:
+    if buffer > 0:  # not recommended, cause the original input boundary will be lost.
         gdf_boundary["geometry"] = gdf_boundary["geometry"].buffer(
             buffer, join_style="mitre"
         )
