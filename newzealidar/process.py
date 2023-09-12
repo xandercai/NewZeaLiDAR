@@ -505,6 +505,7 @@ def run(
         # to check if catchment boundary of RoI within lidar extent
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # to check if already exist in hydro_dem table, if exist_ok, run and update, else pass
+        create_table(engine, DEM)
         exist_ok = (get_data_by_id(engine, DEM, i, geom_col="")).empty or update
 
         if (
