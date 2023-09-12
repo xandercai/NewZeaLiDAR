@@ -172,7 +172,7 @@ def single_process(
             f"The {index} catchment input instructions without dataset mapping, please check!"
         )
         return None
-    # gen_dem(single_instructions)
+    gen_dem(single_instructions)
     gc.collect()
     return single_instructions
 
