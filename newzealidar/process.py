@@ -231,7 +231,7 @@ def store_hydro_to_db(
                     '{extent_path}',
                     '{raw_geometry}',
                     '{geometry}',
-                    '{timestamp}',
+                    '{timestamp}'
                     ) ;"""
         engine.execute(query)
         logger.info(f"Add new {index} in {USERDEM.__tablename__} at {timestamp}.")
