@@ -701,8 +701,8 @@ def check_roi_dem_exist(engine: Engine, geometry: shapely.geometry) -> tuple:
         tables.USERDEM,
         geometry,
         geom_col="raw_geometry",
-        relation="ST_Equals",
-        buffer=0,
+        relation="ST_Contains",
+        buffer=-0.1,
     )
     if not gdf.empty:
         logger.info(

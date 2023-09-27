@@ -1,6 +1,8 @@
-# Site ignore
-data/
-logs/
+# Addon ignore
+data/*
+dat/*
+logs/*
+log/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
