@@ -31,6 +31,7 @@ UPPER_AREA = 600_000_000  # if area is larger than this, it will be split.
 LOWER_AREA = (
     CATCHMENT_RESOLUTION * CATCHMENT_RESOLUTION - EPS
 )  # if area is smaller than this, it will be filtered out.
+RAW_GRID = 5_000  # grid size of split land to calculate raw dem, unit is meter.
 
 """ Catch_id range of different datasets to avoid overlap in the same dataframe or table
 
@@ -887,8 +888,8 @@ def gen_coast_catchments(
     land_path = pathlib.Path(utils.get_env_variable("LAND_FILE"))
     gdf_land = gpd.read_file(data_dir / land_path)
     gdf_land = gdf_land.to_crs(epsg=2193)
-    geom_land_6000 = gdf_land["geometry"].buffer(coast_distance).unary_union
-    geom_coast = geom_land_6000.difference(geom_catchments)
+    geom_land_ex = gdf_land["geometry"].buffer(coast_distance).unary_union
+    geom_coast = geom_land_ex.difference(geom_catchments)
     geom_coast = utils.filter_geometry(
         geom_coast,
         resolution=CATCHMENT_RESOLUTION,
@@ -1173,6 +1174,49 @@ def gen_catchment_table(parallel: bool = True, gpkg: bool = False) -> None:
     gc.collect()
 
 
+def gen_grid_table(
+        coast_distance: Union[int, float] = COAST_DISTANCE,
+        gpkg: bool = False) -> None:
+    """
+    Generate grid table from land geometry.
+
+    :param coast_distance: distance from coast, defined by COAST_DISTANCE
+    :param gpkg: whether to save the result to GPKG
+    :return: None
+    """
+    logger.info("Generating grid table content...")
+    engine = utils.get_database()
+
+    data_dir = pathlib.Path(utils.get_env_variable("DATA_DIR"))
+    land_path = pathlib.Path(utils.get_env_variable("LAND_FILE"))
+    gdf_land = gpd.read_file(data_dir / land_path)
+    gdf_land = gdf_land.to_crs(epsg=2193)
+    geom_land_ex = gdf_land["geometry"].buffer(coast_distance).unary_union
+    # cut into grid
+    list_fishnet = utils.fishnet(geom_land_ex, threshold=RAW_GRID)
+    gdf_grid = gpd.GeoDataFrame(
+        index=range(len(list_fishnet)),
+        crs="epsg:2193",
+        geometry=list_fishnet,
+    )
+    gdf_grid = gdf_grid.reset_index().rename(columns={"index": "catch_id"})
+    gdf_grid["area"] = gdf_grid["geometry"].area
+    gdf_grid = gdf_grid[["catch_id", "area", "geometry"]]
+    if gpkg:
+        utils.save_gpkg(gdf_grid, tables.GRID)
+    gdf_to_db = tables.prepare_to_db(gdf_grid)
+    gdf_to_db.index.rename("grid_id", inplace=True)
+    tables.create_table(engine, tables.GRID)
+    gdf_to_db.to_postgis(
+        tables.GRID.__tablename__, engine, index=True, if_exists="replace"
+    )
+    logger.info(
+        f"Save grid partition to {tables.GRID.__tablename__} table."
+    )
+    engine.dispose()
+    gc.collect()
+
+
 @utils.timeit  # 2:12:52.391500
 def run(gpkg: bool = False) -> None:
     """
@@ -1206,6 +1250,7 @@ def run(gpkg: bool = False) -> None:
     deduplicate_table(tables.CATCHTEMP, tables.CATCHMENT, buffer=-EPS, gpkg=gpkg)
     refine_catchments(tables.CATCHMENT, gpkg=gpkg)
     gen_coast_catchments(gpkg=gpkg)
+    gen_grid_table(gpkg=gpkg)
     logger.info(f"\n-------------- Catchment Process Finished! ----------------")
 
 

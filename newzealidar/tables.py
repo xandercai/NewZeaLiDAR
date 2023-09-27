@@ -134,7 +134,7 @@ class DEMATTR(Base):
     catch_id = Column(
         Integer, primary_key=True, comment="selected area index"
     )  # catchment region id
-    resolution = Column(Integer, comment="DEM resolution in meters")
+    resolution = Column(Float, comment="DEM resolution in meters")
     raw_geometry = Column(
         Geometry("Geometry", srid="2193"), comment="instruction extent geometry"
     )
@@ -146,7 +146,7 @@ class DEMATTR(Base):
 class USERDEM(Base):
     __tablename__: str = "user_dem"
     catch_id = Column(Integer, primary_key=True, comment="regin of interest index")
-    resolution = Column(Integer, comment="DEM resolution in meters")
+    resolution = Column(Float, comment="DEM resolution in meters")
     raw_dem_path = Column(String, comment="raw DEM file path")
     hydro_dem_path = Column(String, comment="hydrologically conditioned DEM file path")
     extent_path = Column(String, comment="DEM extent file path")
@@ -283,6 +283,46 @@ class RUNTIME(Base):
     )  # catchment region id
 
     runtime = Column(Interval, comment="timespan for the catchment processing")
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+
+# define grid table
+class GRID(Base):
+    __tablename__: str = "grid"
+    grid_id = Column(
+        Integer, primary_key=True, comment="grid index"
+    )  # catchment region id
+    area = Column(Float, comment="grid area in square meters")
+    geometry = Column(Geometry("Geometry", srid="2193"), comment="grid area extent")
+    created_at = Column(DateTime)
+
+
+# define grid raw DEM table
+class GRIDDEM(Base):
+    __tablename__: str = "grid_dem"
+    grid_id = Column(
+        Integer, primary_key=True, comment="grid index"
+    )  # catchment region id
+    raw_dem_path = Column(String, comment="grid raw DEM file path")
+    extent_path = Column(String, comment="DEM extent file path")
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+
+# define grid dem attribute table
+class GRIDDEMATTR(Base):
+    __tablename__: str = "grid_dem_attribute"
+    grid_id = Column(
+        Integer, primary_key=True, comment="grid index"
+    )  # catchment region id
+    resolution = Column(Float, comment="DEM resolution in meters")
+    raw_geometry = Column(
+        Geometry("Geometry", srid="2193"), comment="grid initial extent geometry"
+    )
+    geometry = Column(
+        Geometry("Geometry", srid="2193"), comment="grid processed extent geometry"
+    )
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -522,6 +562,7 @@ def get_data_by_id(
     engine: Engine,
     table: Union[Type[Ttable], str],
     index: Union[int, str, list],
+    index_column: str = "catch_id",
     geom_col: str = "geometry",
 ) -> gpd.GeoDataFrame:
     """retrieve db by id to get catchment boundary geometry"""
@@ -530,13 +571,13 @@ def get_data_by_id(
     retrieve_index = tuple(index) if len(index) > 1 else str(f"({index[0]})")
     if not isinstance(table, str):
         table = table.__tablename__
-    query = f"SELECT * FROM {table} WHERE catch_id IN {retrieve_index} ;"
+    query = f"SELECT * FROM {table} WHERE {index_column} IN {retrieve_index} ;"
     if len(geom_col):
         df = gpd.read_postgis(query, engine, geom_col=geom_col)
     else:
         df = pd.read_sql(query, engine)
     if not df.empty and len(df) != len(index):
-        not_exist = [i for i in index if i not in df["catch_id"].to_list()]
+        not_exist = [i for i in index if i not in df[df.columns[0]].to_list()]
         logger.info(f"Try find {index}, but {not_exist} not exist in table {table}.")
     if df.empty:
         logger.info(f"Try find {index}, but not exist in table {table}.")

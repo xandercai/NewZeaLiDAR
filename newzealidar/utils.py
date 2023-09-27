@@ -668,12 +668,17 @@ def gen_table_extent(
     """
     if not isinstance(table, str):
         table = table.__tablename__
-    if table == "hydro_dem":
+    if table == "hydro_dem" or table == "grid_dem":
         df = pd.read_sql(f"SELECT * FROM {table} ;", engine)
         df["geometry"] = df["extent_path"].apply(lambda x: gpd.read_file(x).geometry[0])
-        gdf = gpd.GeoDataFrame(
-            df[["catch_id", "geometry"]], crs="epsg:2193", geometry="geometry"
-        )
+        if table == "grid_dem":
+            gdf = gpd.GeoDataFrame(
+                df[["grid_id", "geometry"]], crs="epsg:2193", geometry="geometry"
+            )
+        else:
+            gdf = gpd.GeoDataFrame(
+                df[["catch_id", "geometry"]], crs="epsg:2193", geometry="geometry"
+            )
     else:
         gdf = gpd.read_postgis(
             f"SELECT * FROM {table}", engine, crs=2193, geom_col="geometry"
