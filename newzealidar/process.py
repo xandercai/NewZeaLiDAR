@@ -653,7 +653,40 @@ def run(
 
             # save lidar extent to check on QGIS
             if gpkg:
-                dem_extent = utils.gen_table_extent(engine, DEM)
+                gpkg_file = (
+                    pathlib.Path(utils.get_env_variable("DATA_DIR"))
+                    / pathlib.Path("gpkg")
+                    / pathlib.Path("dem_extent.gpkg")
+                )
+                if gpkg_file.exists():
+                    exist_extent = gpd.read_file(gpkg_file, driver="GPKG")
+                    current_extent = gpd.read_file(
+                        pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "local_cache"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "subfolder"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "raw_dem_extents"
+                            ]
+                        ),
+                        driver="GeoJSON",
+                    )
+                    dem_extent = pd.concat(
+                        [exist_extent, current_extent], ignore_index=True
+                    )
+                    dem_geom = utils.filter_geometry(dem_extent.unary_union)
+                    dem_extent = gpd.GeoDataFrame(
+                        index=[0], geometry=[dem_geom], crs=2193
+                    )
+                else:
+                    dem_extent = utils.gen_table_extent(engine, DEM)
                 utils.save_gpkg(dem_extent, "dem_extent")
         else:
             if exist_ok:
@@ -786,7 +819,40 @@ def run_grid(
 
             # save lidar extent to check on QGIS
             if gpkg:
-                dem_extent = utils.gen_table_extent(engine, GRIDDEM)
+                gpkg_file = (
+                    pathlib.Path(utils.get_env_variable("DATA_DIR"))
+                    / pathlib.Path("gpkg")
+                    / pathlib.Path("grid_extent.gpkg")
+                )
+                if gpkg_file.exists():
+                    exist_extent = gpd.read_file(gpkg_file, driver="GPKG")
+                    current_extent = gpd.read_file(
+                        pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "local_cache"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "subfolder"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "raw_dem_extents"
+                            ]
+                        ),
+                        driver="GeoJSON",
+                    )
+                    dem_extent = pd.concat(
+                        [exist_extent, current_extent], ignore_index=True
+                    )
+                    dem_geom = utils.filter_geometry(dem_extent.unary_union)
+                    dem_extent = gpd.GeoDataFrame(
+                        index=[0], geometry=[dem_geom], crs=2193
+                    )
+                else:
+                    dem_extent = utils.gen_table_extent(engine, GRIDDEM)
                 utils.save_gpkg(dem_extent, "grid_extent")
         else:
             if exist_ok:
