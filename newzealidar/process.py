@@ -188,14 +188,16 @@ def single_process(
         return None
 
     if grid:
-        if not pathlib.Path(
-            single_instructions["instructions"]["data_paths"]["raw_dem"]
+        if not (
+            result_path
+            / pathlib.Path(single_instructions["instructions"]["data_paths"]["raw_dem"])
         ).exists():
             gen_raw_dem(single_instructions)
         gen_hydro_dem(single_instructions)
     else:
-        if not pathlib.Path(
-            single_instructions["instructions"]["data_paths"]["raw_dem"]
+        if not (
+            result_path
+            / pathlib.Path(single_instructions["instructions"]["data_paths"]["raw_dem"])
         ).exists():
             gen_raw_dem(single_instructions)
         gen_hydro_dem(single_instructions)
