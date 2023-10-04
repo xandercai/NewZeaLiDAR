@@ -187,19 +187,19 @@ def store_hydro_to_db(
         instructions["instructions"]["data_paths"]["local_cache"]
     ) / pathlib.Path(instructions["instructions"]["data_paths"]["subfolder"])
     # {index}_raw_dem.nc
-    raw_dem_path = str(
+    raw_dem_path = (
         dir_path / pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem"])
-    )
+    ).as_posix()
     # {index}.nc
-    result_dem_path = str(
+    result_dem_path = (
         dir_path
         / pathlib.Path(instructions["instructions"]["data_paths"]["result_dem"])
-    )
+    ).as_posix()
     # {index}_raw_extent.geojson, DEM boundary, geofabrics generates it and name it as raw extent.
-    extent_path = str(
+    extent_path = (
         dir_path
         / pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem_extents"])
-    )
+    ).as_posix()
     # {index}.geojson, ROI boundary, this is the real raw extent.
     raw_extent_path = extent_path.replace("_raw_extents", "")
     assert os.path.exists(raw_dem_path), f"File {raw_dem_path} not exist."

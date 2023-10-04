@@ -684,7 +684,9 @@ def gen_table_extent(
     return gdf
 
 
-def check_roi_dem_exist(engine: Engine, geometry: shapely.geometry) -> tuple:
+def check_roi_dem_exist(
+    engine: Engine, geometry: Union[gpd.GeoDataFrame, shapely.geometry]
+) -> tuple:
     """
     check if the ROI DEM is in the database.
     """
@@ -700,10 +702,16 @@ def check_roi_dem_exist(engine: Engine, geometry: shapely.geometry) -> tuple:
         buffer=-0.1,
     )
     if not gdf.empty:
-        logger.info(
-            f"Found DEM by geometry in table USERDEM, catch_id = {gdf['catch_id'].values[0]}."
-        )
-        return gdf, tables.USERDEM.__tablename__
+        gdf_area = gdf.unary_union.area
+        if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
+            geometry_area = geometry.unary_union.area
+        else:
+            geometry_area = geometry.area
+        if abs(gdf_area - geometry_area) < 10:
+            logger.info(
+                f"Found DEM by geometry in table USERDEM, catch_id = {gdf['catch_id'].values[0]}."
+            )
+            return gdf, tables.USERDEM.__tablename__
 
     # ensure DEMATTR table exists
     tables.create_table(engine, tables.DEMATTR)
