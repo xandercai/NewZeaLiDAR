@@ -707,8 +707,10 @@ def check_roi_dem_exist(
         buffer=-0.1,
     )
     if not gdf.empty:
-        gdf_area = gdf.unary_union.area
+        gdf.sort_values("created_at", ascending=False, inplace=True)
+        gdf_area = (gdf.iloc[0])["raw_geometry"].area
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
+            assert len(geometry) == 1, "Only one geometry is allowed."
             geometry_area = geometry.unary_union.area
         else:
             geometry_area = geometry.area
