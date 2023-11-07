@@ -703,17 +703,12 @@ def check_roi_dem_exist(
     )
     if not gdf.empty:
         gdf.sort_values("created_at", ascending=False, inplace=True)
-        gdf_area = (gdf.iloc[0])["raw_geometry"].area
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
             assert len(geometry) == 1, "Only one geometry is allowed."
-            geometry_area = geometry.unary_union.area
-        else:
-            geometry_area = geometry.area
-        if abs(gdf_area - geometry_area) < 10:
-            logger.info(
-                f"Found DEM by geometry in table USERDEM, catch_id = {gdf['catch_id'].values[0]}."
-            )
-            return gdf, tables.USERDEM.__tablename__
+        logger.info(
+            f"Found DEM by geometry in table USERDEM, catch_id = {gdf['catch_id'].values[0]}."
+        )
+        return gdf, tables.USERDEM.__tablename__
 
     # ensure DEMATTR table exists
     tables.create_table(engine, tables.DEMATTR)
@@ -748,7 +743,9 @@ def get_dem_by_id(engine: Engine, index: Union[int, str, list]) -> pd.DataFrame:
     df = pd.read_sql(query, engine)
     if df.empty:
         logger.info(f"Unable to find DEM by catch_id {index} in the database.")
-    else:
+        query = f"SELECT * FROM user_dem WHERE catch_id in {index}"
+        df = pd.read_sql(query, engine)
+    if not df.empty:
         hydro_dem_path = df["hydro_dem_path"].to_list()
         raw_dem_path = df["raw_dem_path"].to_list()
         extent_path = df["extent_path"].to_list()
@@ -798,10 +795,14 @@ def get_dem_by_geometry(
 
     # exact match in USERDEM table
     if table_name == tables.USERDEM.__tablename__:
-        raw_dem_path = gdf["raw_dem_path"].values[0]
-        hydro_dem_path = gdf["hydro_dem_path"].values[0]
-        extent_path = gdf["extent_path"].values[0]
-        resolution = gdf["resolution"].values[0]
+        user_dem = gdf
+        if (gdf.area - geometry.area).iloc[0] > 10:
+            # Geometry is within exisitng DEM but is smaller so needs to be clipped
+            user_dem = clip_dem(engine, gdf, geometry, index=index)
+        raw_dem_path = user_dem["raw_dem_path"].values[0]
+        hydro_dem_path = user_dem["hydro_dem_path"].values[0]
+        extent_path = user_dem["extent_path"].values[0]
+        resolution = user_dem["resolution"].values[0]
     # contains by catchment DEMs, need clip
     elif table_name == tables.DEMATTR.__tablename__:
         clipped_gdf = clip_dem(engine, gdf, geometry, index=index)
