@@ -22,6 +22,7 @@ from newzealidar.tables import (
     LIDAR,
     SDC,
     CATCHMENT,
+    GRID,
     DATASET,
     create_table,
     deduplicate_table,
@@ -45,6 +46,7 @@ def get_roi_from_file(
 def get_roi_from_id(
     index: Union[int, str, list],
     file_path: Union[str, pathlib.Path],
+    grid: bool = False,
     crs: str = "epsg:2193",
 ) -> gpd.GeoDataFrame:
     """convert json region of interest to geodataframe data type. Sample geojson content shows below:
@@ -93,6 +95,7 @@ def get_roi_from_id(
         }
     :param index: index of the region of interest, currently only support 'sea_drain_catchment' table id
     :param file_path: path to the region of interest geojson file.
+    :param grid: if True, the input index is grid id, otherwise it is catchment id.
     :param crs: coordinate reference system, default is 2193.
     """
     index = [index] if not isinstance(index, list) else index
@@ -105,7 +108,10 @@ def get_roi_from_id(
             / pathlib.Path(f"{i}.geojson")
         )
         if not os.path.exists(file):
-            catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
+            if grid:
+                catchment_boundary = get_data_by_id(engine, GRID, i)
+            else:
+                catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
             if catchment_boundary.empty:
                 catchment_boundary = get_data_by_id(engine, SDC, i)
                 if catchment_boundary.empty:
@@ -135,7 +141,7 @@ def get_lidar_data(
         lidar_fetcher = geoapis.lidar.OpenTopography(
             cache_path=data_path,
             # note that the search_polygon added buffer by default in geoapis response,
-            # no need to add buffer here.
+            # no need to add buffer here, unless you want to download more data.
             search_polygon=gdf,
             download_limit_gbytes=20_000,  # 2TB
             verbose=True,
@@ -376,6 +382,7 @@ def run(
     roi_gdf: gpd.GeoDataFrame = None,
     name_base: bool = False,
     download_only: bool = False,
+    grid: bool = False,
     buffer: Union[int, float] = 20,
 ) -> None:
     """
@@ -386,6 +393,7 @@ def run(
     :param roi_file: region of interest boundary file path, support one file only.
     :param name_base: if True, use dataset name retrieved form input to download lidar data.
     :param download_only: if True, only download lidar data, not store to database.
+    :param grid: if True, the input roi_id is grid id, otherwise it is catchment id.
     :param buffer: buffer distance for roi_gdf.
     """
     engine = utils.get_database()
@@ -395,9 +403,12 @@ def run(
     if isinstance(
         roi_id, (int, str, list)
     ):  # catch_id get higher priority then roi_gdf and roi_file
-        dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
+        if grid:
+            dem_dir = pathlib.Path(utils.get_env_variable("GRID_DIR"))
+        else:
+            dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
         catch_path = data_dir / dem_dir
-        roi_gdf = get_roi_from_id(roi_id, catch_path)
+        roi_gdf = get_roi_from_id(roi_id, catch_path, grid)
     if name_base:
         if roi_gdf is not None and not roi_gdf.empty:
             _, _, _, dataset = utils.retrieve_dataset(
@@ -424,6 +435,8 @@ def run(
     else:
         if roi_id is None and pathlib.Path(roi_file).exists():
             roi_gdf = get_roi_from_file(roi_file)
+        if buffer != 0:
+            roi_gdf["geometry"] = roi_gdf["geometry"].buffer(buffer, join_style="mitre")
         if roi_gdf is not None and not roi_gdf.empty:
             get_lidar_data(data_path, gdf=roi_gdf)
         else:

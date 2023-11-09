@@ -333,13 +333,22 @@ def create_table(engine: Engine, table: Type[Ttable]) -> None:
 
 
 def delete_table(
-    engine: Engine, table: Type[Ttable], column: str = None, key: str = None
+    engine: Engine,
+    table: Union[str, Type[Ttable]],
+    column: str = None,
+    key: str = None,
+    keep_schema: bool = True,
 ) -> None:
     """Delete table records by key or delete all records, but keep table schema."""
+    if not isinstance(table, str):
+        table = table.__tablename__
     if isinstance(column, str) and isinstance(key, str):
-        query = f"DELETE FROM {table.__table__} WHERE {column} = '{key}' ;"
+        query = f"DELETE FROM {table} WHERE {column} = '{key}' ;"
+    elif keep_schema:
+        query = f"DELETE FROM {table} ;"
     else:
-        query = f"DELETE FROM {table.__tablename__} ;"
+        logger.warning(f"Delete table {table} permanently.")
+        query = f"DROP TABLE IF EXISTS {table} ;"
     engine.execute(query)
 
 

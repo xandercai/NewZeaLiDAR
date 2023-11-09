@@ -27,11 +27,12 @@ CATCHMENT_RESOLUTION = 30  # resolution of catchment geometry, unit is meter.
 COAST_DISTANCE = 6000  # distance from coast, unit is meter.
 COAST_GRID = 20_000  # grid size of coast, unit is meter.
 # UPPER_AREA = 800_000_000  # if area is larger than this, it will be split.
-UPPER_AREA = 600_000_000  # if area is larger than this, it will be split.
+# UPPER_AREA = 600_000_000  # if area is larger than this, it will be split.
+UPPER_AREA = 100_000_000_000  # do not split.
 LOWER_AREA = (
     CATCHMENT_RESOLUTION * CATCHMENT_RESOLUTION - EPS
 )  # if area is smaller than this, it will be filtered out.
-RAW_GRID = 5_000  # grid size of split land to calculate raw dem, unit is meter.
+GRID_SIZE = 10_000  # grid size of split land to calculate raw dem, unit is meter.
 
 """ Catch_id range of different datasets to avoid overlap in the same dataframe or table
 
@@ -114,14 +115,10 @@ def gen_source_catchment_table(engine: Engine, gpkg: bool = False) -> None:
     logger.info("Fetch catchments data from data.mfe.govt.nz ...")
     list_layers = [
         99776,
-        52363,
-        52364,
     ]  # sea draining catchments, order 5 catchments, order 4 catchments
-    list_tables = [tables.SDC, tables.ORDER5, tables.ORDER4]
+    list_tables = [tables.SDC]
     column_sea = ["Catch_id", "Shape_Area", "geometry"]
-    column_order5 = ["NZreach", "Sum_AREA", "geometry"]
-    column_order4 = ["NZreach", "Sum_AREA", "geometry"]
-    list_columns = [column_sea, column_order5, column_order4]
+    list_columns = [column_sea]
     for layer, table, column in zip(list_layers, list_tables, list_columns):
         gdf = fetch_data_from_mfe(layer)
         gdf = gdf[column].copy()
@@ -1175,8 +1172,8 @@ def gen_catchment_table(parallel: bool = True, gpkg: bool = False) -> None:
 
 
 def gen_grid_table(
-        coast_distance: Union[int, float] = COAST_DISTANCE,
-        gpkg: bool = False) -> None:
+    coast_distance: Union[int, float] = COAST_DISTANCE, gpkg: bool = False
+) -> None:
     """
     Generate grid table from land geometry.
 
@@ -1193,7 +1190,7 @@ def gen_grid_table(
     gdf_land = gdf_land.to_crs(epsg=2193)
     geom_land_ex = gdf_land["geometry"].buffer(coast_distance).unary_union
     # cut into grid
-    list_fishnet = utils.fishnet(geom_land_ex, threshold=RAW_GRID)
+    list_fishnet = utils.fishnet(geom_land_ex, threshold=GRID_SIZE)
     gdf_grid = gpd.GeoDataFrame(
         index=range(len(list_fishnet)),
         crs="epsg:2193",
@@ -1210,46 +1207,59 @@ def gen_grid_table(
     gdf_to_db.to_postgis(
         tables.GRID.__tablename__, engine, index=True, if_exists="replace"
     )
-    logger.info(
-        f"Save grid partition to {tables.GRID.__tablename__} table."
-    )
+    logger.info(f"Save grid partition to {tables.GRID.__tablename__} table.")
+    engine.dispose()
+    gc.collect()
+
+
+def drop_temp_table(table: Union[list, str, Type[tables.Ttable]]) -> None:
+    """
+    Drop temp table from database.
+
+    :param table: table to drop
+    :return: None
+    """
+    if isinstance(table, str):
+        table = [table]
+    if not isinstance(table, list):
+        table = [table.__tablename__]
+    engine = utils.get_database()
+    for t in table:
+        if tables.is_table_exist(engine, t):
+            tables.delete_table(engine, t, keep_schema=False)
     engine.dispose()
     gc.collect()
 
 
 @utils.timeit  # 2:12:52.391500
-def run(gpkg: bool = False) -> None:
+def run(grid_only: bool = False, drop_tmp: bool = True, gpkg: bool = False) -> None:
     """
-    fetch sea draining catchment, order 5 catchment and order 4 catchment data from data.mfe.govt.nz.
+    fetch sea draining catchment from data.mfe.govt.nz.
     process the data to generate catchment table by following steps:
-    1. deduplicate sea draining catchment, order 5 catchment and order 4 catchment data
+    1. deduplicate sea draining catchment
     2. extend sea draining catchment table to eliminate gaps among catchments
     3. deduplicate processed sea draining catchment table again to eliminate overlaps among catchments
     4. refine sea draining catchment table to eliminate gaps among catchments
-    5. refine order 5 catchment table and order 4 table to trim and / or align catchments
-    6. split large catchments by its subordinate catchments to generate catchment table
-    7. extend catchments to eliminate gaps among catchments
-    8. deduplicate catchment table to eliminate overlaps among catchments
-    9. refine catchment table to eliminate gaps among catchments
     10. generate coastal catchments and save to catchment table
+    11. delete temp tables if needed
     the catchments in catchment table are aligned and gap free, ready to be used for further processing.
 
+    :param grid_only: whether to generate grid table only
+    :param drop_tmp: whether to drop temp tables
     :param gpkg: whether to save the result to GPKG
     """
-    initiate_tables(gpkg=gpkg)
-    deduplicate_table(
-        [tables.SDC, tables.ORDER5, tables.ORDER4],
-        [tables.SDCP, tables.ORDER5P, tables.ORDER4P],
-    )
-    extend_catchments(tables.SDCP, gpkg=gpkg)
-    deduplicate_table(tables.SDCP, tables.SDCP, buffer=-EPS, gpkg=gpkg)
-    refine_catchments(tables.SDCP, trim=True, gpkg=gpkg)
-    refine_sub_catchments(gpkg=gpkg)
-    gen_catchment_table(gpkg=gpkg)
-    extend_catchments(tables.CATCHTEMP, gpkg=gpkg)
-    deduplicate_table(tables.CATCHTEMP, tables.CATCHMENT, buffer=-EPS, gpkg=gpkg)
-    refine_catchments(tables.CATCHMENT, gpkg=gpkg)
-    gen_coast_catchments(gpkg=gpkg)
+    if not grid_only:
+        initiate_tables(gpkg=gpkg)
+        deduplicate_table(tables.SDC, tables.SDCP)
+        extend_catchments(tables.SDCP, gpkg=gpkg)
+        deduplicate_table(tables.SDCP, tables.CATCHMENT, buffer=-EPS, gpkg=gpkg)
+        refine_catchments(tables.CATCHMENT, gpkg=gpkg)
+        deduplicate_table(tables.CATCHMENT, tables.CATCHMENT, buffer=-EPS, gpkg=gpkg)
+        gen_coast_catchments(gpkg=gpkg)
+    if drop_tmp:
+        drop_temp_table(
+            [tables.SDC, tables.SDCP, tables.SDCS, tables.CATCHMENTG, tables.COAST]
+        )
     gen_grid_table(gpkg=gpkg)
     logger.info(f"\n-------------- Catchment Process Finished! ----------------")
 
