@@ -1260,7 +1260,7 @@ def run(grid_only: bool = False, drop_tmp: bool = True, gpkg: bool = False) -> N
         drop_temp_table(
             [tables.SDC, tables.SDCP, tables.SDCS, tables.CATCHMENTG, tables.COAST]
         )
-    gen_grid_table(gpkg=gpkg)
+    gen_grid_table(gpkg=True)
     logger.info(f"\n-------------- Catchment Process Finished! ----------------")
 
 

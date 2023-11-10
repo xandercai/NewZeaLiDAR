@@ -747,11 +747,11 @@ def run_grid(
 
     # to check if catchment boundary of RoI within land extent
     gdf_land = gpd.read_file(
-        (Path(data_dir) / Path(utils.get_env_variable("LAND_FILE"))),
-        driver="GeoJSON",
+        (Path(data_dir) / Path(utils.get_env_variable("LAND_FILE"))), driver="GeoJSON"
     )
     if gdf_land.crs.to_epsg() != 2193:
         gdf_land.to_crs(2193, inplace=True)
+    gdf_land = gpd.GeoDataFrame(index=[0], geometry=[gdf_land.unary_union], crs=2193)
 
     logger.info(
         f"******* Start process from grid_id {sorted(grid_id)[0]} to {sorted(grid_id)[-1]} *********"
