@@ -752,11 +752,27 @@ def run_grid(
         # to check if catchment boundary of RoI within lidar extent
         grid_boundary = get_data_by_id(engine, GRID, i, index_column="grid_id")
         # to check if already exist in grid table, if exist_ok, run and update, else pass
-        exist_ok = (
-            get_data_by_id(engine, GRIDDEM, i, geom_col="", index_column="grid_id")
-        ).empty or update
 
-        if lidar_extent.buffer(buffer).intersects(grid_boundary).any() and exist_ok:
+        gdf_land = gpd.read_file(
+            f"../../{Path(utils.get_env_variable('LAND_FILE')).as_posix()}",
+            driver="GeoJSON",
+        )
+        if gdf_land.crs.to_epsg() != 2193:
+            gdf_land.to_crs(2193, inplace=True)
+
+        intersect_ok = (
+            lidar_extent.buffer(buffer).intersects(grid_boundary).any()
+            and gdf_land.buffer(buffer).intersects(grid_boundary).any()
+        )
+
+        exist_ok = (
+            update
+            or (
+                get_data_by_id(engine, GRIDDEM, i, geom_col="", index_column="grid_id")
+            ).empty
+        )
+
+        if intersect_ok and exist_ok:
             # generate grid boundary file for each grid
             utils.gen_boundary_file(grid_path, grid_boundary, i)
             # generate raw dem for each grid
