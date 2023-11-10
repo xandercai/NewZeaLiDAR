@@ -754,7 +754,11 @@ def run_grid(
         # to check if already exist in grid table, if exist_ok, run and update, else pass
 
         gdf_land = gpd.read_file(
-            f"../../{Path(utils.get_env_variable('LAND_FILE')).as_posix()}",
+            (
+                Path(data_dir)
+                / Path("vector")
+                / Path(utils.get_env_variable("LAND_FILE"))
+            ),
             driver="GeoJSON",
         )
         if gdf_land.crs.to_epsg() != 2193:
