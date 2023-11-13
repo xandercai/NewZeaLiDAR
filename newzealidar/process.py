@@ -174,7 +174,7 @@ def single_process(
 
 def store_hydro_to_db(
     engine: Engine, instructions: dict, user_dem: bool = False
-) -> None:
+) -> bool:
     """save hydrological conditioned dem to database in hydro table."""
     assert len(instructions) > 0, "instructions is empty dictionary."
     index = os.path.basename(instructions["dem"]["data_paths"]["subfolder"])
@@ -198,10 +198,19 @@ def store_hydro_to_db(
     utils.get_extent_from_dem(raw_dem_path, dem_extent_path)
     # utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
 
-    assert os.path.exists(raw_dem_path), f"File {raw_dem_path} not exist."
-    assert os.path.exists(result_dem_path), f"File {result_dem_path} not exist."
-    assert os.path.exists(raw_extent_path), f"File {raw_extent_path} not exist."
-    assert os.path.exists(dem_extent_path), f"File {dem_extent_path} not exist."
+    if any(
+        (
+            os.path.exists(raw_dem_path),
+            os.path.exists(result_dem_path),
+            os.path.exists(raw_extent_path),
+            os.path.exists(dem_extent_path),
+        )
+    ):
+        logger.warning(
+            f"File {raw_dem_path} or {result_dem_path} or {raw_extent_path} or {dem_extent_path} not exist."
+            f"Do not store hydrological conditioned dem to database."
+        )
+        return False
     timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %X")
 
     # save to hydrologically conditioned DEM table
@@ -299,6 +308,7 @@ def store_hydro_to_db(
             engine.execute(query)
         logger.info(f"Add new {index} in {DEMATTR.__tablename__} at {timestamp}.")
     # check_table_duplication(engine, table, 'catch_id')
+    return True
 
 
 def store_grid_to_db(engine: Engine, instructions: dict) -> None:
@@ -611,7 +621,11 @@ def run(
                 continue
             t_end = datetime.now()
             if single_instructions:
-                store_hydro_to_db(engine, single_instructions)
+                if not store_hydro_to_db(engine, single_instructions):
+                    logger.warning(
+                        f"Catchment {i} failed. Jump to generate next catchment."
+                    )
+                    continue
             else:
                 logger.error(
                     f"Catchment {i} failed. No instructions generated. Please check."
