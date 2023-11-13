@@ -194,9 +194,9 @@ def store_hydro_to_db(
     # {index}_raw_extent.geojson, DEM boundary
     dem_extent_path = (dir_path / Path(f"{index}_extents.geojson")).as_posix()
 
-    # generate dem extent file from raw dem netcdf
-    # utils.get_extent_from_dem(raw_dem_path, dem_extent_path)
-    utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
+    # generate dem extent file from raw dem netcdf, due to geofabric v1.0.0 change.
+    utils.get_extent_from_dem(raw_dem_path, dem_extent_path)
+    # utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
 
     assert os.path.exists(raw_dem_path), f"File {raw_dem_path} not exist."
     assert os.path.exists(result_dem_path), f"File {result_dem_path} not exist."
@@ -633,11 +633,7 @@ def run(
                     current_extent = gpd.read_file(
                         Path(single_instructions["dem"]["data_paths"]["local_cache"])
                         / Path(single_instructions["dem"]["data_paths"]["subfolder"])
-                        / Path(
-                            single_instructions["dem"]["data_paths"][
-                                f"{i}_extents.geojson"
-                            ]
-                        ),
+                        / Path(f"{i}_extents.geojson"),
                         driver="GeoJSON",
                     )
                     dem_extent = pd.concat(
