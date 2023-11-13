@@ -365,13 +365,16 @@ def get_extent_from_dem(
                 with_nodata=False,
             )
         )
-    if gdf.crs is None:
-        gdf.crs = "epsg:2193"
-    elif gdf.crs.to_epsg() != 2193:
-        logger.info(f"DEM crs is {gdf.crs}, not epsg:2193.")
-        gdf.to_crs(epsg=2193, inplace=True)
-    gdf.to_file(extent_file, driver="GeoJSON")
-    Path(Path(dem_file).parent / Path("_tmp.tif")).unlink()
+    try:
+        if gdf.crs is None:
+            gdf.crs = "epsg:2193"
+        elif gdf.crs.to_epsg() != 2193:
+            logger.info(f"DEM crs is {gdf.crs}, not epsg:2193.")
+            gdf.to_crs(epsg=2193, inplace=True)
+        gdf.to_file(extent_file, driver="GeoJSON")
+        Path(Path(dem_file).parent / Path("_tmp.tif")).unlink()
+    except Exception as e:
+        logger.error(f"Cannot get extent from {dem_file}.\n{e}")
 
 
 def get_boundary_from_dem(
