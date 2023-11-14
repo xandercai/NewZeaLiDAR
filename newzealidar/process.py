@@ -198,7 +198,7 @@ def store_hydro_to_db(
     utils.get_extent_from_dem(raw_dem_path, dem_extent_path)
     # utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
 
-    if any(
+    if not all(
         (
             os.path.exists(raw_dem_path),
             os.path.exists(result_dem_path),
