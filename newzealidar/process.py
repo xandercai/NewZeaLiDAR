@@ -195,7 +195,7 @@ def store_hydro_to_db(
     dem_extent_path = (dir_path / Path(f"{index}_extents.geojson")).as_posix()
 
     # generate dem extent file from raw dem netcdf, due to geofabric v1.0.0 change.
-    utils.get_extent_from_dem(raw_dem_path, dem_extent_path)
+    utils.get_extent_from_dem(result_dem_path, dem_extent_path)
     # utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
 
     if not all(
@@ -217,8 +217,8 @@ def store_hydro_to_db(
     if user_dem:  # for user define catchment
         create_table(engine, USERDEM)
         resolution = instructions["default"]["output"]["grid_params"]["resolution"]
-        raw_geometry = gpd.read_file(raw_extent_path, Driver="GeoJSON").geometry[0]
-        dem_geometry = gpd.read_file(dem_extent_path, Driver="GeoJSON").geometry[0]
+        raw_geometry = (gpd.read_file(raw_extent_path, Driver="GeoJSON")).unary_union
+        dem_geometry = (gpd.read_file(dem_extent_path, Driver="GeoJSON")).unary_union
         query = f"""INSERT INTO {USERDEM.__tablename__} (
                     catch_id,
                     resolution,
@@ -274,8 +274,8 @@ def store_hydro_to_db(
         # hydrologically conditioned DEM geometry table, to faster query
         create_table(engine, DEMATTR)
         resolution = instructions["default"]["output"]["grid_params"]["resolution"]
-        raw_geometry = gpd.read_file(raw_extent_path, Driver="GeoJSON").geometry[0]
-        dem_geometry = gpd.read_file(dem_extent_path, Driver="GeoJSON").geometry[0]
+        raw_geometry = (gpd.read_file(raw_extent_path, Driver="GeoJSON")).unary_union
+        dem_geometry = (gpd.read_file(dem_extent_path, Driver="GeoJSON")).unary_union
         query = (
             f"SELECT catch_id FROM {DEMATTR.__tablename__} WHERE catch_id = '{index}' ;"
         )
