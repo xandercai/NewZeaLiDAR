@@ -1190,7 +1190,7 @@ def gen_grid_table(
     gdf_land = gdf_land.to_crs(epsg=2193)
     geom_land_ex = gdf_land["geometry"].buffer(coast_distance).unary_union
     # cut into grid
-    list_fishnet = utils.fishnet(geom_land_ex, threshold=GRID_SIZE)
+    list_fishnet = utils.fishnet(geom_land_ex, threshold=GRID_SIZE, lrbu=True)
     gdf_grid = gpd.GeoDataFrame(
         index=range(len(list_fishnet)),
         crs="epsg:2193",

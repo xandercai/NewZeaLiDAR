@@ -633,9 +633,15 @@ def filter_geometry(
 
 
 # @timeit
-def fishnet(geometry: shapely.geometry, threshold: Union[int, float]) -> list:
+def fishnet(
+    geometry: shapely.geometry, threshold: Union[int, float], lrbu=False
+) -> list:
     """
     create fishnet grid based on the geometry and threshold
+    :param geometry: input geometry
+    :param threshold: threshold of the grid
+    :param l2r_b2u: if True, create grid from left to right and bottom to up,
+    otherwise from bottom to top and left to right
     """
     logger.info(f"Create fishnet grid with threshold {threshold}...")
     bounds = geometry.bounds
@@ -646,15 +652,32 @@ def fishnet(geometry: shapely.geometry, threshold: Union[int, float]) -> list:
     # ncols = int(xmax - xmin + 1)
     # nrows = int(ymax - ymin + 1)
     result = []
-    for i in range(ymin, ymax + 1):
-        for j in range(xmin, xmax + 1):
-            b = box(
-                j * threshold, i * threshold, (j + 1) * threshold, (i + 1) * threshold
-            )
-            g = geometry.intersection(b)
-            if g.is_empty:
-                continue
-            result.append(g)
+    if lrbu:
+        for i in range(ymin, ymax + 1):
+            for j in range(xmin, xmax + 1):
+                b = box(
+                    j * threshold,
+                    i * threshold,
+                    (j + 1) * threshold,
+                    (i + 1) * threshold,
+                )
+                g = geometry.intersection(b)
+                if g.is_empty:
+                    continue
+                result.append(g)
+    else:  # bulr
+        for i in range(xmin, xmax + 1):
+            for j in range(ymin, ymax + 1):
+                b = box(
+                    i * threshold,
+                    j * threshold,
+                    (i + 1) * threshold,
+                    (j + 1) * threshold,
+                )
+                g = geometry.intersection(b)
+                if g.is_empty:
+                    continue
+                result.append(g)
     return result
 
 
