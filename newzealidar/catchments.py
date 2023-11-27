@@ -1232,7 +1232,7 @@ def drop_temp_table(table: Union[list, str, Type[tables.Ttable]]) -> None:
 
 
 @utils.timeit  # 2:12:52.391500
-def run(grid_only: bool = False, drop_tmp: bool = True, gpkg: bool = False) -> None:
+def run(grid_only: bool = False, drop_tmp: bool = False, gpkg: bool = False) -> None:
     """
     fetch sea draining catchment from data.mfe.govt.nz.
     process the data to generate catchment table by following steps:
