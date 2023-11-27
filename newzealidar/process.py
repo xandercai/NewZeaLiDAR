@@ -135,6 +135,7 @@ def single_process(
     index: int,
     mode: str = "api",
     grid: bool = False,
+    update: bool = False,
     buffer: Union[int, float] = 0,
 ) -> Union[dict, None]:
     """the gen_dem process in a single row of geodataframe"""
@@ -166,7 +167,14 @@ def single_process(
         )
         return None
 
-    from_instructions_dict(instructions)
+    raw_path = (
+        Path(instructions["dem"]["data_paths"]["local_cache"])
+        / Path(instructions["dem"]["data_paths"]["subfolder"])
+        / Path(instructions["dem"]["data_paths"]["raw_dem"])
+    )
+
+    if update or not raw_path.exists():
+        from_instructions_dict(instructions)
 
     gc.collect()
     return single_instructions
@@ -241,7 +249,6 @@ def store_hydro_to_db(
         engine.execute(query)
         logger.info(f"Add new {index} in {USERDEM.__tablename__} at {timestamp}.")
     else:  # for catchment table
-        create_table(engine, DEM)
         query = f"SELECT * FROM {DEM.__tablename__} WHERE catch_id = '{index}' ;"
         df_from_db = pd.read_sql(query, engine)
         if not df_from_db.empty:
@@ -588,6 +595,7 @@ def run(
 
     runtime = []
     failed = []
+    create_table(engine, DEM)
 
     logger.info(
         f"******* Start process from catch_id {sorted(catch_id)[0]} to {sorted(catch_id)[-1]} *********"
@@ -596,7 +604,6 @@ def run(
         # to check if catchment boundary of RoI within lidar extent
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # to check if already exist in hydro_dem table, if exist_ok, run and update, else pass
-        create_table(engine, DEM)
         exist_ok = (get_data_by_id(engine, DEM, i, geom_col="")).empty or update
 
         if (
@@ -609,7 +616,7 @@ def run(
             t_start = datetime.now()
             try:
                 single_instructions = single_process(
-                    engine, instructions, i, mode=mode, buffer=buffer
+                    engine, instructions, i, mode=mode, update=update, buffer=buffer
                 )
             except Exception as e:
                 logger.exception(f"Catchment {i} failed. Error message:\n{e}")
