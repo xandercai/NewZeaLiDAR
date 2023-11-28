@@ -24,6 +24,7 @@ from rioxarray import merge
 # import xarray as xr
 from dotenv import load_dotenv
 import shapely
+import shapely.wkt
 from shapely import unary_union, to_geojson
 from shapely.geometry import MultiPolygon, Polygon, GeometryCollection, box
 from sqlalchemy import create_engine
@@ -271,6 +272,12 @@ def gen_boundary_file(
         "type": "name",
         "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs}"},
     }
+
+    # https://github.com/geopandas/geopandas/issues/1724
+    gdf_boundary["geometry"] = gdf_boundary["geometry"].apply(
+        lambda x: shapely.wkt.loads(shapely.wkt.dumps(x, rounding_precision=4))
+    )
+
     feature = geojson.Feature(geometry=gdf_boundary["geometry"][0], properties={})
     feature_collection = geojson.FeatureCollection(
         [feature], name="selected_polygon", crs=feature_crs
