@@ -203,7 +203,12 @@ def store_hydro_to_db(
     dem_extent_path = (dir_path / Path(f"{index}_extents.geojson")).as_posix()
 
     # generate dem extent file from raw dem netcdf, due to geofabric v1.0.0 change.
-    utils.get_extent_from_dem(result_dem_path, dem_extent_path)
+    try:
+        utils.get_extent_from_dem(result_dem_path, dem_extent_path)
+    except Exception as e:
+        logger.exception(f"Generate {index} extent failed. Error message:\n{e}")
+        return False
+
     # utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
 
     if not all(
