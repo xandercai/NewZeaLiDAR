@@ -420,8 +420,8 @@ def run(
             )
         else:
             logger.info(f"Use all dataset name to download lidar data.")
-            gdf = read_postgres_table(engine, DATASET)
-            dataset = sorted(gdf["name"].tolist())
+            df = read_postgres_table(engine, DATASET)
+            dataset = sorted(df["name"].tolist())
         # filter out Waikato dataset
         dataset = [name for name in dataset if "LiDAR_" not in name]
         if len(dataset) < 1:

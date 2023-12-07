@@ -751,9 +751,7 @@ def gen_table_extent(
                 df[["catch_id", "geometry"]], crs="epsg:2193", geometry="geometry"
             )
     else:
-        gdf = gpd.read_postgis(
-            f"SELECT * FROM {table}", engine, crs=2193, geom_col="geometry"
-        )
+        gdf = tables.read_postgis_table(engine, table)
     if filter_it:
         geom = filter_geometry(gdf["geometry"])
         gdf = gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
