@@ -509,7 +509,8 @@ def retrieve_lidar(
 
 def retrieve_catchment(
     engine: Engine,
-    boundary_file: Union[str, Path],
+    boundary_file: Union[str, Path] = None,
+    gdf: gpd.GeoDataFrame = None,
     buffer: Union[int, float] = 0,
 ) -> list:
     """
@@ -519,9 +520,17 @@ def retrieve_catchment(
 
     :param engine: sqlalchemy engine
     :param boundary_file: boundary file path, geojson format. see demo example in 'configs' directory.
+    :param gdf: boundary geodataframe, higher priority than boundary_file.
     :param buffer: buffer factor for the boundary geometry, default is 0.
     """
-    geometry = get_geometry_from_file(boundary_file, buffer=buffer)
+    if boundary_file is not None:
+        geometry = get_geometry_from_file(boundary_file, buffer=buffer)
+    if gdf is not None:
+        geometry = (
+            gdf["geometry"].values[0].buffer(buffer, join_style="mitre")
+            if buffer != 0
+            else gdf["geometry"].values[0]
+        )
     query = f"""SELECT catch_id, geometry FROM catchment
                 WHERE ST_Intersects(geometry, ST_SetSRID('{geometry}'::geometry, 2193)) ;"""
     gdf = gpd.read_postgis(query, engine, geom_col="geometry")
@@ -754,6 +763,34 @@ def gen_table_extent(
         gdf = tables.read_postgis_table(engine, table)
     if filter_it:
         geom = filter_geometry(gdf["geometry"])
+        gdf = gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
+    return gdf
+
+
+def gen_key_extent(
+    engine: Engine,
+    table: Union[str, Type[Ttable]],
+    key: Union[str, int, list],
+    column: Union[str, int] = "catch_id",
+    filter_it: bool = True,
+) -> gpd.GeoDataFrame:
+    """
+    Generate catchment extent from table by keys/rows.
+    """
+    if not isinstance(table, str):
+        table = table.__tablename__
+    if isinstance(key, list):
+        query = (
+            f"""SELECT * FROM {table} WHERE {column} IN {tuple(key)} ;"""
+            if len(key) > 1
+            else f"""SELECT * FROM {table} WHERE {column} = '{key[0]}' ;"""
+        )
+    else:
+        query = f"""SELECT * FROM {table} WHERE {column} = '{key}' ;"""
+    gdf = gpd.read_postgis(query, engine, geom_col="geometry")
+    geometry = gdf["geometry"].unary_union
+    if filter_it:
+        geom = filter_geometry(geometry)
         gdf = gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
     return gdf
 
