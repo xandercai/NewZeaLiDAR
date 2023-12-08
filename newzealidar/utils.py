@@ -520,17 +520,17 @@ def retrieve_catchment(
 
     :param engine: sqlalchemy engine
     :param boundary_file: boundary file path, geojson format. see demo example in 'configs' directory.
-    :param gdf: boundary geodataframe, higher priority than boundary_file.
+    :param gdf: boundary geodataframe, lower priority than boundary_file.
     :param buffer: buffer factor for the boundary geometry, default is 0.
     """
-    if boundary_file is not None:
-        geometry = get_geometry_from_file(boundary_file, buffer=buffer)
     if gdf is not None:
         geometry = (
             gdf["geometry"].values[0].buffer(buffer, join_style="mitre")
             if buffer != 0
             else gdf["geometry"].values[0]
         )
+    if boundary_file is not None:
+        geometry = get_geometry_from_file(boundary_file, buffer=buffer)
     query = f"""SELECT catch_id, geometry FROM catchment
                 WHERE ST_Intersects(geometry, ST_SetSRID('{geometry}'::geometry, 2193)) ;"""
     gdf = gpd.read_postgis(query, engine, geom_col="geometry")
