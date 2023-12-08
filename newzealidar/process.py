@@ -173,7 +173,10 @@ def single_process(
         / Path(instructions["dem"]["data_paths"]["raw_dem"])
     )
 
-    if update or not raw_path.exists():
+    if update:
+        raw_path.unlink(missing_ok=True)
+
+    if not raw_path.exists():
         from_instructions_dict(instructions)
 
     gc.collect()
