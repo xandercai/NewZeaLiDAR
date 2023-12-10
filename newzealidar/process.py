@@ -15,6 +15,7 @@ import os
 from pathlib import Path, PurePosixPath
 from datetime import datetime, timedelta
 from typing import Union
+import shutil
 
 import geopandas as gpd
 import pandas as pd
@@ -135,7 +136,6 @@ def single_process(
     index: int,
     mode: str = "api",
     grid: bool = False,
-    update: bool = False,
     buffer: Union[int, float] = 0,
 ) -> Union[dict, None]:
     """the gen_dem process in a single row of geodataframe"""
@@ -173,11 +173,6 @@ def single_process(
     raw_dem_path = dir_path / Path(instructions["dem"]["data_paths"]["raw_dem"])
     result_dem_path = dir_path / Path(instructions["dem"]["data_paths"]["result_dem"])
     dem_extent_path = dir_path / Path(f"{index}_extents.geojson")
-
-    if update:
-        raw_dem_path.unlink(missing_ok=True)
-        result_dem_path.unlink(missing_ok=True)
-        dem_extent_path.unlink(missing_ok=True)
 
     if not raw_dem_path.exists():
         from_instructions_dict(instructions)
@@ -612,6 +607,12 @@ def run(
         f"******* Start process from catch_id {sorted(catch_id)[0]} to {sorted(catch_id)[-1]} *********"
     )
     for i in catch_id:
+        if update:
+            logger.warning(
+                f"Update mode is on, will delete exist {i} directory and update existing info in database."
+            )
+            shutil.rmtree(catch_path / Path(str(i)), ignore_errors=True)
+
         # to check if catchment boundary of RoI within lidar extent
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # to check if already exist in hydro_dem table, if exist_ok, run and update, else pass
@@ -622,12 +623,12 @@ def run(
             and exist_ok
         ):
             # generate catchment boundary file for each catchment
-            utils.gen_boundary_file(catch_path, catchment_boundary, i)
+            utils.gen_boundary_file(catch_path, catchment_boundary, i, buffer=buffer)
             # generate hydrological conditioned dem for each catchment
             t_start = datetime.now()
             try:
                 single_instructions = single_process(
-                    engine, instructions, i, mode=mode, update=update, buffer=buffer
+                    engine, instructions, i, mode=mode, buffer=buffer
                 )
             except Exception as e:
                 logger.exception(f"Catchment {i} failed. Error message:\n{e}")
@@ -785,6 +786,11 @@ def run_grid(
         f"******* Start process from grid_id {sorted(grid_id)[0]} to {sorted(grid_id)[-1]} *********"
     )
     for i in grid_id:
+        if update:
+            logger.warning(
+                f"Update mode is on, will delete exist {i} directory and update existing info in database."
+            )
+            shutil.rmtree(Path(data_dir) / Path(str(i)), ignore_errors=True)
         # to check if catchment boundary of RoI within lidar extent
         grid_boundary = get_data_by_id(engine, GRID, i, index_column="grid_id")
         # to check if already exist in grid table and within land extent, if exist_ok is ture, run and update, else pass
@@ -801,7 +807,7 @@ def run_grid(
 
         if intersect_ok and exist_ok:
             # generate grid boundary file for each grid
-            utils.gen_boundary_file(grid_path, grid_boundary, i)
+            utils.gen_boundary_file(grid_path, grid_boundary, i, buffer=buffer)
             # generate raw dem for each grid
             t_start = datetime.now()
             try:
