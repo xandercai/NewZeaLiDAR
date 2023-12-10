@@ -1,5 +1,5 @@
 {
-  "default": {
+  "instructions": {
     "output": {
       "crs": {
         "horizontal": 2193,
@@ -10,23 +10,17 @@
       }
     },
     "processing": {
-      "chunk_size": 150,
+      "chunk_size": 100,
       "memory_limit": 0
     },
     "general": {
-      "download_limit_gbytes": 10000,
-      "interpolation": {
-        "no_data": "linear"
-      }
-    }
-  },
-  "dem": {
-    "general": {
+      "set_dem_shoreline": true,
       "drop_offshore_lidar": true,
-      "z_labels": {
-        "ocean": "valdco"
-      },
-      "lidar_classifications_to_keep": [2, 9]
+      "bathymetry_contours_z_label": "valdco",
+      "lidar_classifications_to_keep ": [
+        2
+      ],
+      "interpolation_method": "linear"
     }
   }
 }

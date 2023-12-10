@@ -4,7 +4,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python==3.11
+  - python
   - pip
   - python-dotenv
   - pytest
@@ -24,6 +24,10 @@ dependencies:
   - scrapy
   - dask
   - bokeh!=3.0.*,>=2.4.2  # for Dask dashboard
+  - laspy
   - pip:
-    - geofabrics==1.0.0
+    - laszip  # for vertical datum transference
+    - geofabrics
+    - geovoronoi
+    - geoapis
 prefix:

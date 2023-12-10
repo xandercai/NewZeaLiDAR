@@ -34,40 +34,33 @@ def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
     """Get extent geometry from kml file."""
     file = pathlib.Path(item["extent_path"])
     file = file.parent / pathlib.Path("tmp_datasets__" + str(file.name))
-    # new added: filter out the datasets with datum other than NZVD2016
-    if item["datum"] != "NZVD2016":
-        logger.warning(
-            f"original datum is not NZVD2016, will use empty geometry for dataset {item['name']}."
-        )
-        gdf = gpd.GeoDataFrame(index=[0], crs="epsg:2193", geometry=[Polygon()])
-    else:
-        if os.path.exists(file):
-            gdf = gpd.read_file(file)
-            gdf = gdf.to_crs(2193)
-        else:  # even file not exists, do not change item['extent_path'] to empty
-            # if the dataset does not provide the extent file, use the tile index file to get the extent.
-            # do not suggest to use this method, because read and transform tile index file to geometry is slow.
-            # the tile index file will not exist if lidar.py does not download the tile index file.
-            if os.path.exists(item["tile_path"]):
-                logger.warning(
-                    f"Extent file {file} is not exist, will use tile index geometry to generate dataset extent."
-                )
-                gdf = gpd.GeoDataFrame.from_file("zip://" + str(item["tile_path"]))
-                assert not gdf.empty, f'Tile index file {item["tile_path"]} is empty.'
-                assert "2193" in str(
-                    gdf.crs
-                ), f'Tile index file {item["tile_path"]} is not epsg:2193.'
-                # get the extent of the dataset
-                geom = gdf["geometry"].unary_union
-                # remove gaps
-                geom = geom.buffer(2, join_style="mitre").buffer(-2, join_style="mitre")
-                gdf = gpd.GeoDataFrame(index=[0], crs="epsg:2193", geometry=[geom])
-            else:  # even file not exists, do not change item['tile_path'] to empty
-                logger.warning(
-                    f'Extent file {file} and tile index file {item["tile_path"]} are not available, '
-                    f"use empty geometry."
-                )
-                gdf = gpd.GeoDataFrame(index=[0], crs="epsg:2193", geometry=[Polygon()])
+    if os.path.exists(file):
+        gdf = gpd.read_file(file)
+        gdf = gdf.to_crs(2193)
+    else:  # even file not exists, do not change item['extent_path'] to empty
+        # if the dataset does not provide the extent file, use the tile index file to get the extent.
+        # do not suggest to use this method, because read and transform tile index file to geometry is slow.
+        # the tile index file will not exist if lidar.py does not download the tile index file.
+        if os.path.exists(item["tile_path"]):
+            logger.warning(
+                f"Extent file {file} is not exist, will use tile index geometry to generate dataset extent."
+            )
+            gdf = gpd.GeoDataFrame.from_file("zip://" + str(item["tile_path"]))
+            assert not gdf.empty, f'Tile index file {item["tile_path"]} is empty.'
+            assert "2193" in str(
+                gdf.crs
+            ), f'Tile index file {item["tile_path"]} is not epsg:2193.'
+            # get the extent of the dataset
+            geom = gdf["geometry"].unary_union
+            # remove gaps
+            geom = geom.buffer(2, join_style="mitre").buffer(-2, join_style="mitre")
+            gdf = gpd.GeoDataFrame(index=[0], crs="epsg:2193", geometry=[geom])
+        else:  # even file not exists, do not change item['tile_path'] to empty
+            logger.warning(
+                f'Extent file {file} and tile index file {item["tile_path"]} are not available, '
+                f"use empty geometry."
+            )
+            gdf = gpd.GeoDataFrame(index=[0], crs="epsg:2193", geometry=[Polygon()])
     return gdf["geometry"].values[0]
 
 
@@ -379,21 +372,13 @@ def rename_file():
 
 
 def run():
-    """
-    Run the module.
-    """
+    """Run the module."""
     crawl_dataset()
     rename_file()
     instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
     # generate dataset mapping info
     engine = utils.get_database()
     utils.map_dataset_name(engine, instructions_file)
-
-    # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
-    lidar_extent = utils.gen_table_extent(engine, DATASET)
-    # save lidar extent to check on QGIS
-    utils.save_gpkg(lidar_extent, "lidar_extent")
-
     engine.dispose()
     gc.collect()
     logger.info("Finish processing datasets by scrapy.")

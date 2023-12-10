@@ -5,7 +5,7 @@ This module contains utility functions for the package.
 import json
 import logging
 import os
-from pathlib import Path, PurePosixPath
+import pathlib
 import shutil
 from collections import OrderedDict
 from datetime import datetime
@@ -15,16 +15,12 @@ from typing import Type, TypeVar, Union
 import geojson
 import geopandas as gpd
 import pandas as pd
-
-import rasterio as rio
-from rasterio.features import dataset_features
 import rioxarray as rxr
 from rioxarray import merge
 
 # import xarray as xr
 from dotenv import load_dotenv
 import shapely
-import shapely.wkt
 from shapely import unary_union, to_geojson
 from shapely.geometry import MultiPolygon, Polygon, GeometryCollection, box
 from sqlalchemy import create_engine
@@ -194,7 +190,9 @@ def timeit(f):
         start = datetime.now()
         result = f(*args, **kwargs)
         span = datetime.now() - start
-        logger.info(f"\n*** TIME IT ***\n{f.__name__} runtime: {span}\n***************")
+        logging.info(
+            f"\n*** TIME IT ***\n{f.__name__} runtime: {span}\n***************"
+        )
         return result
 
     return wrapper
@@ -212,9 +210,9 @@ def cast_geodataframe(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return gdf
 
 
-def case_insensitive_rglob(directory: Union[str, Path], pattern: str) -> list:
+def case_insensitive_rglob(directory: Union[str, pathlib.Path], pattern: str) -> list:
     """case-insensitive rglob function."""
-    path = Path(directory)
+    path = pathlib.Path(directory)
     assert path.is_dir(), f"{path} is not a directory."
     return [
         str(file.as_posix())
@@ -224,7 +222,7 @@ def case_insensitive_rglob(directory: Union[str, Path], pattern: str) -> list:
 
 
 def get_files(
-    suffix: Union[str, list], file_path: Union[str, Path], expect: int = -1
+    suffix: Union[str, list], file_path: Union[str, pathlib.Path], expect: int = -1
 ) -> Union[list, str]:
     """To get the path of all the files with filetype extension in the input file path."""
     list_file_path = []
@@ -253,12 +251,12 @@ def drop_z(ds: gpd.GeoSeries) -> gpd.GeoSeries:
 
 
 def gen_boundary_file(
-    data_path: Union[str, Path],
+    data_path: Union[str, pathlib.Path],
     gdf_boundary: gpd.GeoDataFrame,
     index: Union[int, str],
     buffer: Union[int, float] = 0,
     crs: str = "2193",
-    save_file: Union[str, Path] = None,
+    save_file: Union[str, pathlib.Path] = None,
 ) -> None:
     """
     generate boundary file based on the input geodataframe.
@@ -272,27 +270,27 @@ def gen_boundary_file(
         "type": "name",
         "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs}"},
     }
-
-    # https://github.com/geopandas/geopandas/issues/1724
-    gdf_boundary["geometry"] = gdf_boundary["geometry"].apply(
-        lambda x: shapely.wkt.loads(shapely.wkt.dumps(x, rounding_precision=4))
-    )
-
     feature = geojson.Feature(geometry=gdf_boundary["geometry"][0], properties={})
     feature_collection = geojson.FeatureCollection(
         [feature], name="selected_polygon", crs=feature_crs
     )
     if save_file is None:
-        file_path = Path(data_path) / Path(f"{index}") / Path(f"{index}.geojson")
+        file_path = (
+            pathlib.Path(data_path)
+            / pathlib.Path(f"{index}")
+            / pathlib.Path(f"{index}.geojson")
+        )
     else:
-        file_path = Path(save_file)
+        file_path = pathlib.Path(save_file)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "w") as f:
         geojson.dump(feature_collection, f, indent=2)
-    logger.info(f"Generate region of interest geojson file at {file_path}.")
+    logging.info(f"Generate region of interest geojson file at {file_path}.")
 
 
-def map_dataset_name(engine: Engine, instructions_file: Union[str, Path]) -> None:
+def map_dataset_name(
+    engine: Engine, instructions_file: Union[str, pathlib.Path]
+) -> None:
     """Mapping dataset name with its ordered id by publication date (and so on), and save in a json file."""
     logger.info(
         "Mapping dataset name with its ordered id by publication date (and so on)."
@@ -305,18 +303,18 @@ def map_dataset_name(engine: Engine, instructions_file: Union[str, Path]) -> Non
     ).reset_index(drop=True)
     with open(instructions_file, "r") as f:
         instructions = json.load(f)
-        if not instructions["dem"].get("dataset_mapping"):
-            instructions["dem"]["dataset_mapping"] = {"lidar": {}}
-        instructions["dem"]["dataset_mapping"]["lidar"] = dict(
+        if not instructions["instructions"].get("dataset_mapping"):
+            instructions["instructions"]["dataset_mapping"] = {"lidar": {}}
+        instructions["instructions"]["dataset_mapping"]["lidar"] = dict(
             zip(df["name"], df.index + 1)
         )
-        instructions["dem"]["dataset_mapping"]["lidar"]["Unknown"] = 0
+        instructions["instructions"]["dataset_mapping"]["lidar"]["Unknown"] = 0
     with open(instructions_file, "w") as f:
         json.dump(instructions, f, indent=2)
 
 
 def get_geometry_from_file(
-    boundary_file: Union[str, Path], buffer: Union[int, float] = 0
+    boundary_file: Union[str, pathlib.Path], buffer: Union[int, float] = 0
 ) -> shapely.geometry:
     """
     Read boundary geometry boundary_file, and return the buffered geometry.
@@ -353,55 +351,9 @@ def get_geometry_from_db(
     return geom.buffer(buffer, join_style="mitre") if buffer != 0 else geom
 
 
-def get_extent_from_dem(
-    dem_file: Union[str, Path], extent_file: Union[str, Path] = None
-):
-    """
-    get the extent of the dem netcdf file.
-    """
-    with rxr.open_rasterio(dem_file) as rds:
-        rds.z.rio.to_raster(Path(dem_file).parent / Path("_tmp.tif"))
-    with rio.open(Path(dem_file).parent / Path("_tmp.tif")) as src:
-        gdf = gpd.GeoDataFrame.from_features(
-            dataset_features(
-                src,
-                bidx=1,
-                as_mask=True,
-                geographic=False,
-                band=False,
-                with_nodata=False,
-            )
-        )
-    try:
-        if gdf.crs is None:
-            gdf.crs = "epsg:2193"
-        elif gdf.crs.to_epsg() != 2193:
-            logger.info(f"DEM crs is {gdf.crs}, not epsg:2193.")
-            gdf.to_crs(epsg=2193, inplace=True)
-        gdf.to_file(extent_file, driver="GeoJSON")
-        Path(Path(dem_file).parent / Path("_tmp.tif")).unlink()
-    except Exception as e:
-        logger.error(f"Cannot get extent from {dem_file}.\n{e}")
-
-
-def get_boundary_from_dem(
-    dem_file: Union[str, Path],
-    extent_file: Union[str, Path] = None,
-    crs: str = "epsg:2193",
-):
-    """
-    get the boundary (bbox) of the dem netcdf file.
-    """
-    with rxr.open_rasterio(dem_file) as rds:
-        bbox = rds.rio.bounds()
-        geom = box(*bbox)
-    gdf = gpd.GeoDataFrame(index=[0], geometry=[geom], crs=crs)
-    gdf.to_file(extent_file, driver="GeoJSON")
-
-
 def retrieve_dataset(
     engine: Engine,
-    boundary_file: Union[str, Path] = None,
+    boundary_file: Union[str, pathlib.Path] = None,
     sort_by: str = "survey_end_date",
     buffer: Union[int, float] = 0,
     boundary_df: gpd.GeoDataFrame = None,
@@ -442,7 +394,7 @@ def retrieve_dataset(
 
 def retrieve_lidar(
     engine: Engine,
-    boundary_file: Union[str, Path],
+    boundary_file: Union[str, pathlib.Path],
     sort_by: str = "survey_end_date",
     buffer: Union[int, float] = 0,
 ) -> OrderedDict:
@@ -485,18 +437,18 @@ def retrieve_lidar(
             list_pop_dataset.append(dataset_name)
             continue
         datasets_dict[dataset_name]["file_paths"] = [
-            PurePosixPath(p) for p in sorted(df["file_path"].to_list())
+            pathlib.PurePosixPath(p) for p in sorted(df["file_path"].to_list())
         ]
         if "LiDAR_" in dataset_name:  # to handle waikato datasets
             _dataset_name = "_".join(dataset_name.split("_")[:2])
             datasets_dict[dataset_name]["tile_index_file"] = [
-                PurePosixPath(p) for p in tile_path_list if _dataset_name in p
+                pathlib.PurePosixPath(p) for p in tile_path_list if _dataset_name in p
             ][0]
         else:
             datasets_dict[dataset_name]["tile_index_file"] = [
-                PurePosixPath(p) for p in tile_path_list if dataset_name in p
+                pathlib.PurePosixPath(p) for p in tile_path_list if dataset_name in p
             ][0]
-        logger.debug(
+        logging.debug(
             f"Dataset {dataset_name} has "
             f'{len(datasets_dict[dataset_name]["file_paths"])} lidar files in '
             f"ROI with buffer distance {buffer} mitre."
@@ -509,7 +461,7 @@ def retrieve_lidar(
 
 def retrieve_catchment(
     engine: Engine,
-    boundary_file: Union[str, Path],
+    boundary_file: Union[str, pathlib.Path],
     buffer: Union[int, float] = 0,
 ) -> list:
     """
@@ -534,7 +486,7 @@ def retrieve_catchment(
 
 def retrieve_dem(
     engine: Engine,
-    boundary_file: Union[str, Path],
+    boundary_file: Union[str, pathlib.Path],
     buffer: Union[int, float] = 0,
 ) -> pd.DataFrame:
     """
@@ -640,17 +592,11 @@ def filter_geometry(
 
 
 # @timeit
-def fishnet(
-    geometry: shapely.geometry, threshold: Union[int, float], lrbu=False
-) -> list:
+def fishnet(geometry: shapely.geometry, threshold: Union[int, float]) -> list:
     """
     create fishnet grid based on the geometry and threshold
-    :param geometry: input geometry
-    :param threshold: threshold of the grid
-    :param l2r_b2u: if True, create grid from left to right and bottom to up,
-    otherwise from bottom to top and left to right
     """
-    logger.info(f"Create fishnet grid with threshold {threshold}...")
+    logging.info(f"Create fishnet grid with threshold {threshold}...")
     bounds = geometry.bounds
     xmin = int(bounds[0] // threshold)
     xmax = int(bounds[2] // threshold)
@@ -659,32 +605,15 @@ def fishnet(
     # ncols = int(xmax - xmin + 1)
     # nrows = int(ymax - ymin + 1)
     result = []
-    if lrbu:
-        for i in range(ymin, ymax + 1):
-            for j in range(xmin, xmax + 1):
-                b = box(
-                    j * threshold,
-                    i * threshold,
-                    (j + 1) * threshold,
-                    (i + 1) * threshold,
-                )
-                g = geometry.intersection(b)
-                if g.is_empty:
-                    continue
-                result.append(g)
-    else:  # bulr
-        for i in range(xmin, xmax + 1):
-            for j in range(ymin, ymax + 1):
-                b = box(
-                    i * threshold,
-                    j * threshold,
-                    (i + 1) * threshold,
-                    (j + 1) * threshold,
-                )
-                g = geometry.intersection(b)
-                if g.is_empty:
-                    continue
-                result.append(g)
+    for i in range(xmin, xmax + 1):
+        for j in range(ymin, ymax + 1):
+            b = box(
+                i * threshold, j * threshold, (i + 1) * threshold, (j + 1) * threshold
+            )
+            g = geometry.intersection(b)
+            if g.is_empty:
+                continue
+            result.append(g)
     return result
 
 
@@ -751,7 +680,9 @@ def gen_table_extent(
                 df[["catch_id", "geometry"]], crs="epsg:2193", geometry="geometry"
             )
     else:
-        gdf = tables.read_postgis_table(engine, table)
+        gdf = gpd.read_postgis(
+            f"SELECT * FROM {table}", engine, crs=2193, geom_col="geometry"
+        )
     if filter_it:
         geom = filter_geometry(gdf["geometry"])
         gdf = gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
@@ -826,14 +757,16 @@ def get_dem_by_id(engine: Engine, index: Union[int, str, list]) -> pd.DataFrame:
         for _hydro_dem_path, _raw_dem_path, _extent_path in zip(
             hydro_dem_path, raw_dem_path, extent_path
         ):
-            if not Path(_hydro_dem_path).exists():
-                logger.warning(
+            if not pathlib.Path(_hydro_dem_path).exists():
+                logging.warning(
                     f"Expected Hydro DEM File {_hydro_dem_path} does not exist."
                 )
-            if not Path(_raw_dem_path).exists():
-                logger.warning(f"Expected Raw DEM File {_raw_dem_path} does not exist.")
-            if not Path(_extent_path).exists():
-                logger.warning(f"Expected Extent File {_extent_path} does not exist.")
+            if not pathlib.Path(_raw_dem_path).exists():
+                logging.warning(
+                    f"Expected Raw DEM File {_raw_dem_path} does not exist."
+                )
+            if not pathlib.Path(_extent_path).exists():
+                logging.warning(f"Expected Extent File {_extent_path} does not exist.")
     return df
 
 
@@ -906,7 +839,7 @@ def get_dem_band_and_resolution_by_geometry(
     dem_path, _, _, _ = get_dem_by_geometry(engine, geometry)
 
     # Open the Hydro DEM using rioxarray
-    with rxr.open_rasterio(Path(dem_path)) as f:
+    with rxr.open_rasterio(pathlib.Path(dem_path)) as f:
         # Select the first band of the Hydro DEM
         hydro_dem = f.sel(band=band)
         # Get the unique resolution from the Hydro DEM
@@ -924,16 +857,18 @@ def get_dem_band_and_resolution_by_geometry(
             return hydro_dem, res_no
 
 
-def clip_netcdf(file_list: list, save_file: Path, geometry: shapely.geometry) -> None:
+def clip_netcdf(
+    file_list: list, save_file: pathlib.Path, geometry: shapely.geometry
+) -> None:
     """ "
     Clip netcdf file by geometry
     """
     list_dem = []
     for file in file_list:
-        if Path(file).exists():
+        if pathlib.Path(file).exists():
             # ValueError: Resulting object does not have monotonic global indexes along dimension y
             # list_xds.append(xr.open_dataset(file))
-            with rxr.open_rasterio(Path(file)) as f:
+            with rxr.open_rasterio(pathlib.Path(file)) as f:
                 list_dem.append(f.sel(band=1))
         else:
             logger.warning(f"Expected DEM File {file} does not exist.")
@@ -951,7 +886,7 @@ def gen_clipped_data(
     index: int,
     df: pd.DataFrame,
     gdf: gpd.GeoDataFrame,
-    save_dir: Path,
+    save_dir: pathlib.Path,
     geometry: shapely.geometry,
 ):
     """
@@ -966,10 +901,10 @@ def gen_clipped_data(
     # set path for new files
     hydro_dem_file_list = df["hydro_dem_path"].tolist()
     raw_dem_file_list = df["raw_dem_path"].tolist()
-    hydro_save_path = save_dir / Path(f"{index}.nc")
-    raw_save_path = save_dir / Path(f"{index}_raw.nc")
-    extent_save_path = save_dir / Path(f"{index}_raw_extent.geojson")
-    raw_extent_save_path = save_dir / Path(f"{index}.geojson")
+    hydro_save_path = save_dir / pathlib.Path(f"{index}.nc")
+    raw_save_path = save_dir / pathlib.Path(f"{index}_raw.nc")
+    extent_save_path = save_dir / pathlib.Path(f"{index}_raw_extent.geojson")
+    raw_extent_save_path = save_dir / pathlib.Path(f"{index}.geojson")
 
     # clip and save
     # hydro_dem
@@ -1008,9 +943,9 @@ def clip_dem(
         assert index.isdigit(), f"Catchment index {index} is not digit."
     # get DEM file path
     clipped_dem_path = (
-        Path(get_env_variable("DATA_DIR"))
-        / Path(get_env_variable("DEM_DIR"))
-        / Path(f"{index}")
+        pathlib.Path(get_env_variable("DATA_DIR"))
+        / pathlib.Path(get_env_variable("DEM_DIR"))
+        / pathlib.Path(f"{index}")
     )
     clipped_dem_path.mkdir(parents=True, exist_ok=True)
     catch_id = gdf["catch_id"].to_list()
@@ -1024,9 +959,11 @@ def clip_dem(
         {
             "catch_id": int(index),
             "resolution": gdf["resolution"].values[0],
-            "raw_dem_path": str(clipped_dem_path / Path(f"{index}_raw_dem.nc")),
-            "hydro_dem_path": str(clipped_dem_path / Path(f"{index}.nc")),
-            "extent_path": str(clipped_dem_path / Path(f"{index}_extent.geojson")),
+            "raw_dem_path": str(clipped_dem_path / pathlib.Path(f"{index}_raw_dem.nc")),
+            "hydro_dem_path": str(clipped_dem_path / pathlib.Path(f"{index}.nc")),
+            "extent_path": str(
+                clipped_dem_path / pathlib.Path(f"{index}_extent.geojson")
+            ),
             "raw_geometry": geometry,
             "geometry": clipped_dem_geometry,
             "created_at": datetime.now(),
@@ -1045,15 +982,15 @@ def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
     """
     Save source catchments to GPKG
     """
-    gpkg_path = Path(get_env_variable("DATA_DIR")) / Path("gpkg")
+    gpkg_path = pathlib.Path(get_env_variable("DATA_DIR")) / pathlib.Path("gpkg")
     if isinstance(file, str):
         file_name = f"{file}.gpkg"
     else:
         file_name = f"{file.__tablename__}.gpkg"
-    Path(gpkg_path).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(gpkg_path).mkdir(parents=True, exist_ok=True)
     gdf.set_crs(epsg=2193, inplace=True)
-    gdf.to_file(str(gpkg_path / Path(file_name)), driver="GPKG")
-    logger.info(f"Save source catchments to {gpkg_path / Path(file_name)}.")
+    gdf.to_file(str(gpkg_path / pathlib.Path(file_name)), driver="GPKG")
+    logging.info(f"Save source catchments to {gpkg_path / pathlib.Path(file_name)}.")
 
 
 def make_valid(geometry: shapely.geometry) -> shapely.geometry:
@@ -1075,16 +1012,12 @@ def get_min_width(geometry: shapely.geometry) -> float:
     return min(width, height)
 
 
-def delete_dir(directory: Union[str, Path]) -> None:
+def delete_dir(directory: Union[str, pathlib.Path]) -> None:
     """
     Delete directory
     """
     if isinstance(directory, str):
-        directory = Path(directory)
+        directory = pathlib.Path(directory)
     if directory.exists():
         shutil.rmtree(directory)
         logger.info(f"Delete directory {directory}.")
-
-
-if __name__ == "__main__":
-    get_extent_from_dem("125340.nc", "125340.geojson")

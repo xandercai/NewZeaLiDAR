@@ -12,13 +12,13 @@ import gc
 import json
 import logging
 import os
-from pathlib import Path, PurePosixPath
+import pathlib
 from datetime import datetime, timedelta
 from typing import Union
 
 import geopandas as gpd
 import pandas as pd
-from geofabrics.runner import from_instructions_dict
+from geofabrics import processor
 from sqlalchemy.engine import Engine
 
 from newzealidar import utils
@@ -56,7 +56,7 @@ def save_instructions(instructions: dict, instructions_path: str) -> None:
             d = str(d)
         return d
 
-    Path(instructions_path).parent.mkdir(parents=True, exist_ok=True)
+    pathlib.Path(instructions_path).parent.mkdir(parents=True, exist_ok=True)
     with open(instructions_path, "w") as f:
         json.dump(instructions, f, default=_recursive_str, indent=2)
 
@@ -70,63 +70,82 @@ def gen_instructions(
     buffer: Union[int, float] = 0,
 ) -> dict:
     """Read basic instruction file and adds keys and uses geojson as catchment_boundary"""
-    if instructions["default"]["processing"].get("number_of_cores") is None:
-        instructions["default"]["processing"]["number_of_cores"] = os.cpu_count()
-    data_dir = PurePosixPath(utils.get_env_variable("DATA_DIR"))
+    if instructions["instructions"]["processing"].get("number_of_cores") is None:
+        instructions["instructions"]["processing"]["number_of_cores"] = os.cpu_count()
+    data_dir = pathlib.PurePosixPath(utils.get_env_variable("DATA_DIR"))
     if grid:
-        dem_dir = PurePosixPath(utils.get_env_variable("GRID_DIR"))
+        dem_dir = pathlib.PurePosixPath(utils.get_env_variable("GRID_DIR"))
     else:
-        dem_dir = PurePosixPath(utils.get_env_variable("DEM_DIR"))
-    index_dir = PurePosixPath(str(index))
-    subfolder = PurePosixPath(dem_dir / index_dir)
-    if instructions.get("dem") is None or instructions["dem"].get("data_paths") is None:
-        instructions["dem"]["data_paths"] = {}
-    instructions["dem"]["data_paths"]["local_cache"] = str(data_dir)
-    instructions["dem"]["data_paths"]["subfolder"] = str(subfolder)
-    instructions["dem"]["data_paths"]["downloads"] = str(data_dir)
-    instructions["dem"]["data_paths"]["result_dem"] = f"{index}.nc"
-    if grid:
-        with open(Path(data_dir) / Path(subfolder) / Path(f"{index}.nc"), "w+") as f:
-            f.write("empty file to prevent generate hydro dem in grid dem directory.")
-    instructions["dem"]["data_paths"]["raw_dem"] = f"{index}_raw_dem.nc"
-    instructions["dem"]["data_paths"]["extents"] = f"{index}.geojson"
+        dem_dir = pathlib.PurePosixPath(utils.get_env_variable("DEM_DIR"))
+    index_dir = pathlib.PurePosixPath(str(index))
+    subfolder = pathlib.PurePosixPath(dem_dir / index_dir)
+    if instructions["instructions"].get("data_paths") is None:
+        instructions["instructions"]["data_paths"] = {}
+    instructions["instructions"]["data_paths"]["local_cache"] = str(data_dir)
+    instructions["instructions"]["data_paths"]["subfolder"] = str(subfolder)
+    instructions["instructions"]["data_paths"]["downloads"] = str(data_dir)
+    instructions["instructions"]["data_paths"]["result_dem"] = f"{index}.nc"
+    instructions["instructions"]["data_paths"]["raw_dem"] = f"{index}_raw_dem.nc"
+    instructions["instructions"]["data_paths"][
+        "raw_dem_extents"
+    ] = f"{index}_raw_extents.geojson"
+    instructions["instructions"]["data_paths"][
+        "catchment_boundary"
+    ] = f"{index}.geojson"
     if utils.get_env_variable("LAND_FILE", allow_empty=True) != "":
         # cwd is in dem_dir: datastorage/hydro_dem/index
-        instructions["dem"]["data_paths"][
-            "land"
-        ] = f"../../{Path(utils.get_env_variable('LAND_FILE')).as_posix()}"
+        instructions["instructions"]["data_paths"]["land"] = str(
+            f"../../{str(pathlib.PurePosixPath(utils.get_env_variable('LAND_FILE')))}"
+        )
     catchment_boundary_file = str(
-        PurePosixPath(data_dir / subfolder / Path(f"{index}.geojson"))
+        pathlib.PurePosixPath(data_dir / subfolder / pathlib.Path(f"{index}.geojson"))
     )
-    if instructions["dem"].get("datasets") is None:
-        instructions["dem"]["datasets"] = {}
+
+    if instructions["instructions"].get("datasets") is None:
+        instructions["instructions"]["datasets"] = {"lidar": {}}
     if mode == "api":
-        if instructions["dem"]["data_paths"].get("land") is None:
-            instructions["dem"]["datasets"]["vector"]["linz"][
+        if instructions["instructions"]["data_paths"].get("land") is None:
+            if instructions["instructions"]["datasets"].get("vector") is None:
+                instructions["instructions"]["datasets"]["vector"] = {"linz": {}}
+            instructions["instructions"]["datasets"]["vector"]["linz"][
                 "key"
             ] = utils.get_env_variable("LINZ_API_KEY")
-            instructions["dem"]["datasets"]["vector"]["linz"]["land"] = {
+            instructions["instructions"]["datasets"]["vector"]["linz"]["land"] = {
                 "layers": [51153]
             }
-        instructions["dem"]["datasets"]["lidar"] = {
-            "open_topography": utils.retrieve_dataset(
-                engine, catchment_boundary_file, "survey_end_date", buffer=buffer
-            )[0]
-        }
-        instructions["dem"]["datasets"]["lidar"]["local"] = {}
+        instructions["instructions"]["datasets"]["lidar"][
+            "open_topography"
+        ] = utils.retrieve_dataset(
+            engine, catchment_boundary_file, "survey_end_date", buffer=buffer
+        )[
+            0
+        ]
+        instructions["instructions"]["datasets"]["lidar"]["local"] = {}
     if mode == "local":
-        instructions["dem"]["datasets"]["lidar"] = {
-            "local": utils.retrieve_lidar(
-                engine, catchment_boundary_file, "survey_end_date", buffer=buffer
-            )
-        }
-        instructions["dem"]["datasets"]["lidar"]["open_topography"] = {}
+        instructions["instructions"]["datasets"]["lidar"][
+            "local"
+        ] = utils.retrieve_lidar(
+            engine, catchment_boundary_file, "survey_end_date", buffer=buffer
+        )
+        instructions["instructions"]["datasets"]["lidar"]["open_topography"] = {}
     # for debug
     instructions_path = str(
-        PurePosixPath(data_dir / subfolder / Path("instructions.json"))
+        pathlib.PurePosixPath(data_dir / subfolder / pathlib.Path("instructions.json"))
     )
     save_instructions(instructions, instructions_path)
     return instructions
+
+
+def gen_raw_dem(instructions: dict) -> None:
+    """Use geofabrics to generate the hydrologically conditioned DEM."""
+    runner = processor.RawLidarDemGenerator(instructions["instructions"], debug=False)
+    runner.run()
+
+
+def gen_hydro_dem(instructions: dict) -> None:
+    """Use geofabrics to generate the hydrologically conditioned DEM."""
+    runner = processor.HydrologicDemGenerator(instructions["instructions"], debug=False)
+    runner.run()
 
 
 def single_process(
@@ -135,7 +154,6 @@ def single_process(
     index: int,
     mode: str = "api",
     grid: bool = False,
-    update: bool = False,
     buffer: Union[int, float] = 0,
 ) -> Union[dict, None]:
     """the gen_dem process in a single row of geodataframe"""
@@ -145,93 +163,85 @@ def single_process(
     single_instructions = gen_instructions(
         engine, instructions, index, mode=mode, grid=grid, buffer=buffer
     )
-    result_path = Path(single_instructions["dem"]["data_paths"]["local_cache"]) / Path(
-        single_instructions["dem"]["data_paths"]["subfolder"]
-    )
-    Path(result_path).mkdir(
+    result_path = pathlib.Path(
+        single_instructions["instructions"]["data_paths"]["local_cache"]
+    ) / pathlib.Path(single_instructions["instructions"]["data_paths"]["subfolder"])
+    pathlib.Path(result_path).mkdir(
         parents=True, exist_ok=True
     )  # to label the catchment are processed even failed
     if mode == "api":
-        if not single_instructions["dem"]["datasets"]["lidar"]["open_topography"]:
+        if not single_instructions["instructions"]["datasets"]["lidar"][
+            "open_topography"
+        ]:
             logger.info(f"The {index} catchment has no lidar data exist.")
             return None
     elif mode == "local":
-        if not single_instructions["dem"]["datasets"]["lidar"]["local"]:
+        if not single_instructions["instructions"]["datasets"]["lidar"]["local"]:
             logger.info(f"The {index} catchment has no lidar data exist.")
             return None
     else:
         raise ValueError(f"Invalid mode: {mode}")
-    if not single_instructions["dem"]["dataset_mapping"]:
+    if not single_instructions["instructions"]["dataset_mapping"]:
         logger.error(
             f"The {index} catchment input instructions without dataset mapping, please check!"
         )
         return None
 
-    raw_path = (
-        Path(instructions["dem"]["data_paths"]["local_cache"])
-        / Path(instructions["dem"]["data_paths"]["subfolder"])
-        / Path(instructions["dem"]["data_paths"]["raw_dem"])
-    )
-
-    if update or not raw_path.exists():
-        from_instructions_dict(instructions)
-
+    if grid:
+        if not (
+            result_path
+            / pathlib.Path(single_instructions["instructions"]["data_paths"]["raw_dem"])
+        ).exists():
+            gen_raw_dem(single_instructions)
+        gen_hydro_dem(single_instructions)
+    else:
+        if not (
+            result_path
+            / pathlib.Path(single_instructions["instructions"]["data_paths"]["raw_dem"])
+        ).exists():
+            gen_raw_dem(single_instructions)
+        gen_hydro_dem(single_instructions)
     gc.collect()
     return single_instructions
 
 
 def store_hydro_to_db(
     engine: Engine, instructions: dict, user_dem: bool = False
-) -> bool:
+) -> None:
     """save hydrological conditioned dem to database in hydro table."""
     assert len(instructions) > 0, "instructions is empty dictionary."
-    index = os.path.basename(instructions["dem"]["data_paths"]["subfolder"])
-    dir_path = Path(instructions["dem"]["data_paths"]["local_cache"]) / Path(
-        instructions["dem"]["data_paths"]["subfolder"]
-    )
+    index = os.path.basename(instructions["instructions"]["data_paths"]["subfolder"])
+    dir_path = pathlib.Path(
+        instructions["instructions"]["data_paths"]["local_cache"]
+    ) / pathlib.Path(instructions["instructions"]["data_paths"]["subfolder"])
     # {index}_raw_dem.nc
     raw_dem_path = (
-        dir_path / Path(instructions["dem"]["data_paths"]["raw_dem"])
+        dir_path / pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem"])
     ).as_posix()
     # {index}.nc
     result_dem_path = (
-        dir_path / Path(instructions["dem"]["data_paths"]["result_dem"])
+        dir_path
+        / pathlib.Path(instructions["instructions"]["data_paths"]["result_dem"])
     ).as_posix()
-    # {index}.geojson, ROI boundary
-    raw_extent_path = (dir_path / Path(f"{index}.geojson")).as_posix()
-    # {index}_raw_extent.geojson, DEM boundary
-    dem_extent_path = (dir_path / Path(f"{index}_extents.geojson")).as_posix()
-
-    # generate dem extent file from raw dem netcdf, due to geofabric v1.0.0 change.
-    try:
-        utils.get_extent_from_dem(result_dem_path, dem_extent_path)
-    except Exception as e:
-        logger.exception(f"Generate {index} extent failed. Error message:\n{e}")
-        return False
-
-    # utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
-
-    if not all(
-        (
-            os.path.exists(raw_dem_path),
-            os.path.exists(result_dem_path),
-            os.path.exists(raw_extent_path),
-            os.path.exists(dem_extent_path),
-        )
-    ):
-        logger.warning(
-            f"File {raw_dem_path} or {result_dem_path} or {raw_extent_path} or {dem_extent_path} not exist."
-            f"Do not store hydrological conditioned dem to database."
-        )
-        return False
+    # {index}_raw_extent.geojson, DEM boundary, geofabrics generates it and name it as raw extent.
+    extent_path = (
+        dir_path
+        / pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem_extents"])
+    ).as_posix()
+    # {index}.geojson, ROI boundary, this is the real raw extent.
+    raw_extent_path = extent_path.replace("_raw_extents", "")
+    assert os.path.exists(raw_dem_path), f"File {raw_dem_path} not exist."
+    assert os.path.exists(result_dem_path), f"File {result_dem_path} not exist."
+    assert os.path.exists(extent_path), f"File {extent_path} not exist."
+    assert os.path.exists(raw_extent_path), f"File {raw_extent_path} not exist."
     timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %X")
 
     # save to hydrologically conditioned DEM table
     if user_dem:  # for user define catchment
         create_table(engine, USERDEM)
-        resolution = instructions["default"]["output"]["grid_params"]["resolution"]
-        raw_geometry = (gpd.read_file(raw_extent_path, Driver="GeoJSON")).unary_union
-        dem_geometry = (gpd.read_file(dem_extent_path, Driver="GeoJSON")).unary_union
+        resolution = instructions["instructions"]["output"]["grid_params"]["resolution"]
+        raw_geometry = gpd.read_file(raw_extent_path, Driver="GeoJSON").geometry[0]
+        geometry = gpd.read_file(extent_path, Driver="GeoJSON").geometry[0]
         query = f"""INSERT INTO {USERDEM.__tablename__} (
                     catch_id,
                     resolution,
@@ -246,21 +256,22 @@ def store_hydro_to_db(
                     '{resolution}',
                     '{raw_dem_path}',
                     '{result_dem_path}',
-                    '{dem_extent_path}',
+                    '{extent_path}',
                     '{raw_geometry}',
-                    '{dem_geometry}',
+                    '{geometry}',
                     '{timestamp}'
                     ) ;"""
         engine.execute(query)
         logger.info(f"Add new {index} in {USERDEM.__tablename__} at {timestamp}.")
     else:  # for catchment table
+        create_table(engine, DEM)
         query = f"SELECT * FROM {DEM.__tablename__} WHERE catch_id = '{index}' ;"
         df_from_db = pd.read_sql(query, engine)
         if not df_from_db.empty:
             query = f"""UPDATE {DEM.__tablename__}
                         SET raw_dem_path = '{raw_dem_path}',
                             hydro_dem_path = '{result_dem_path}',
-                            extent_path = '{dem_extent_path}',
+                            extent_path = '{extent_path}',
                             updated_at = '{timestamp}'
                         WHERE catch_id = '{index}' ;"""
             engine.execute(query)
@@ -277,7 +288,7 @@ def store_hydro_to_db(
                         {index},
                         '{raw_dem_path}',
                         '{result_dem_path}',
-                        '{dem_extent_path}',
+                        '{extent_path}',
                         '{timestamp}',
                         '{timestamp}'
                         ) ;"""
@@ -285,9 +296,9 @@ def store_hydro_to_db(
 
         # hydrologically conditioned DEM geometry table, to faster query
         create_table(engine, DEMATTR)
-        resolution = instructions["default"]["output"]["grid_params"]["resolution"]
-        raw_geometry = (gpd.read_file(raw_extent_path, Driver="GeoJSON")).unary_union
-        dem_geometry = (gpd.read_file(dem_extent_path, Driver="GeoJSON")).unary_union
+        resolution = instructions["instructions"]["output"]["grid_params"]["resolution"]
+        raw_geometry = gpd.read_file(raw_extent_path, Driver="GeoJSON").geometry[0]
+        geometry = gpd.read_file(extent_path, Driver="GeoJSON").geometry[0]
         query = (
             f"SELECT catch_id FROM {DEMATTR.__tablename__} WHERE catch_id = '{index}' ;"
         )
@@ -296,7 +307,7 @@ def store_hydro_to_db(
             query = f"""UPDATE {DEMATTR.__tablename__}
                         SET raw_geometry = '{raw_geometry}',
                             resolution = '{resolution}',
-                            geometry = '{dem_geometry}',
+                            geometry = '{geometry}',
                             updated_at = '{timestamp}'
                         WHERE catch_id = '{index}' ;"""
             engine.execute(query)
@@ -313,37 +324,36 @@ def store_hydro_to_db(
                         {index},
                         '{resolution}',
                         '{raw_geometry}',
-                        '{dem_geometry}',
+                        '{geometry}',
                         '{timestamp}',
                         '{timestamp}'
                         ) ;"""
             engine.execute(query)
         logger.info(f"Add new {index} in {DEMATTR.__tablename__} at {timestamp}.")
     # check_table_duplication(engine, table, 'catch_id')
-    return True
 
 
 def store_grid_to_db(engine: Engine, instructions: dict) -> None:
     """save hydrological conditioned dem to database in hydro table."""
     assert len(instructions) > 0, "instructions is empty dictionary."
-    index = os.path.basename(instructions["dem"]["data_paths"]["subfolder"])
-    dir_path = Path(instructions["dem"]["data_paths"]["local_cache"]) / Path(
-        instructions["dem"]["data_paths"]["subfolder"]
-    )
+    index = os.path.basename(instructions["instructions"]["data_paths"]["subfolder"])
+    dir_path = pathlib.Path(
+        instructions["instructions"]["data_paths"]["local_cache"]
+    ) / pathlib.Path(instructions["instructions"]["data_paths"]["subfolder"])
     # {index}_raw_dem.nc
-    raw_dem_path = str(dir_path / Path(instructions["dem"]["data_paths"]["raw_dem"]))
-    # {index}.geojson, ROI boundary.
-    raw_extent_path = (dir_path / Path(f"{index}.geojson")).as_posix()
-    # {index}_dem_extent.geojson, DEM boundary.
-    dem_extent_path = (dir_path / Path(f"{index}_extents.geojson")).as_posix()
-    # generate dem extent file from raw dem netcdf
-    # utils.get_extent_from_dem(raw_dem_path, dem_extent_path)
-    utils.get_boundary_from_dem(raw_dem_path, dem_extent_path)
-
+    raw_dem_path = str(
+        dir_path / pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem"])
+    )
+    # {index}_raw_extent.geojson, DEM boundary, geofabrics generates it and name it as raw extent.
+    extent_path = str(
+        dir_path
+        / pathlib.Path(instructions["instructions"]["data_paths"]["raw_dem_extents"])
+    )
+    # {index}.geojson, ROI boundary, this is the real raw extent.
+    raw_extent_path = extent_path.replace("_raw_extents", "")
     assert os.path.exists(raw_dem_path), f"File {raw_dem_path} not exist."
+    assert os.path.exists(extent_path), f"File {extent_path} not exist."
     assert os.path.exists(raw_extent_path), f"File {raw_extent_path} not exist."
-    assert os.path.exists(dem_extent_path), f"File {dem_extent_path} not exist."
-
     timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %X")
 
     create_table(engine, GRIDDEM)
@@ -352,7 +362,7 @@ def store_grid_to_db(engine: Engine, instructions: dict) -> None:
     if not df_from_db.empty:
         query = f"""UPDATE {GRIDDEM.__tablename__}
                     SET raw_dem_path = '{raw_dem_path}',
-                        extent_path = '{dem_extent_path}',
+                        extent_path = '{extent_path}',
                         updated_at = '{timestamp}'
                     WHERE grid_id = '{index}' ;"""
         engine.execute(query)
@@ -367,7 +377,7 @@ def store_grid_to_db(engine: Engine, instructions: dict) -> None:
                     ) VALUES (
                     {index},
                     '{raw_dem_path}',
-                    '{dem_extent_path}',
+                    '{extent_path}',
                     '{timestamp}',
                     '{timestamp}'
                     ) ;"""
@@ -375,9 +385,9 @@ def store_grid_to_db(engine: Engine, instructions: dict) -> None:
 
     # Grid DEM geometry table, to faster query
     create_table(engine, GRIDDEMATTR)
-    resolution = instructions["default"]["output"]["grid_params"]["resolution"]
+    resolution = instructions["instructions"]["output"]["grid_params"]["resolution"]
     raw_geometry = gpd.read_file(raw_extent_path, Driver="GeoJSON").geometry[0]
-    dem_geometry = gpd.read_file(dem_extent_path, Driver="GeoJSON").geometry[0]
+    geometry = gpd.read_file(extent_path, Driver="GeoJSON").geometry[0]
     query = (
         f"SELECT grid_id FROM {GRIDDEMATTR.__tablename__} WHERE grid_id = '{index}' ;"
     )
@@ -386,7 +396,7 @@ def store_grid_to_db(engine: Engine, instructions: dict) -> None:
         query = f"""UPDATE {GRIDDEMATTR.__tablename__}
                     SET raw_geometry = '{raw_geometry}',
                         resolution = '{resolution}',
-                        geometry = '{dem_geometry}',
+                        geometry = '{geometry}',
                         updated_at = '{timestamp}'
                     WHERE grid_id = '{index}' ;"""
         engine.execute(query)
@@ -403,7 +413,7 @@ def store_grid_to_db(engine: Engine, instructions: dict) -> None:
                     {index},
                     '{resolution}',
                     '{raw_geometry}',
-                    '{dem_geometry}',
+                    '{geometry}',
                     '{timestamp}',
                     '{timestamp}'
                     ) ;"""
@@ -448,8 +458,8 @@ def main(
         assert index.isdigit(), f"User define catchment index {index} is not digit."
     logger.info(f"Start Catchment {index} processing...")
     engine = utils.get_database()
-    data_dir = Path(utils.get_env_variable("DATA_DIR"))
-    dem_dir = Path(utils.get_env_variable("DEM_DIR"))
+    data_dir = pathlib.Path(utils.get_env_variable("DATA_DIR"))
+    dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
     result_dir = data_dir / dem_dir
     if isinstance(catchment_boundary, str):
         # read geojson string, not a file
@@ -467,9 +477,9 @@ def main(
             return
 
     lidar_extent_file = (
-        Path(utils.get_env_variable("DATA_DIR"))
-        / Path("gpkg")
-        / Path("lidar_extent.gpkg")
+        pathlib.Path(utils.get_env_variable("DATA_DIR"))
+        / pathlib.Path("gpkg")
+        / pathlib.Path("lidar_extent.gpkg")
     )
     if lidar_extent_file.exists():
         lidar_extent = gpd.read_file(lidar_extent_file, driver="GPKG")
@@ -479,11 +489,15 @@ def main(
         # save lidar extent to check on QGIS
         utils.save_gpkg(lidar_extent, "lidar_extent")
     if lidar_extent.buffer(buffer).intersects(catchment_boundary).any():
-        geojson_file = Path(result_dir) / Path(f"{index}") / Path(f"{index}.geojson")
+        geojson_file = (
+            pathlib.Path(result_dir)
+            / pathlib.Path(f"{index}")
+            / pathlib.Path(f"{index}.geojson")
+        )
         geojson_file.parent.mkdir(parents=True, exist_ok=True)
-        if not Path(geojson_file).exists():
+        if not pathlib.Path(geojson_file).exists():
             utils.gen_boundary_file(result_dir, catchment_boundary, index)
-        instructions_file = Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
+        instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
         with open(instructions_file, "r") as f:
             instructions = json.loads(f.read())
         try:
@@ -535,10 +549,10 @@ def run(
     :param gpkg: if True, save the hydrological conditioned dem as geopackage.
     """
     engine = utils.get_database()
-    data_dir = Path(utils.get_env_variable("DATA_DIR"))
-    dem_dir = Path(utils.get_env_variable("DEM_DIR"))
+    data_dir = pathlib.Path(utils.get_env_variable("DATA_DIR"))
+    dem_dir = pathlib.Path(utils.get_env_variable("DEM_DIR"))
     catch_path = data_dir / dem_dir
-    instructions_file = Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
+    instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
     with open(instructions_file, "r") as f:
         instructions = json.loads(f.read())
 
@@ -600,7 +614,6 @@ def run(
 
     runtime = []
     failed = []
-    create_table(engine, DEM)
 
     logger.info(
         f"******* Start process from catch_id {sorted(catch_id)[0]} to {sorted(catch_id)[-1]} *********"
@@ -609,6 +622,7 @@ def run(
         # to check if catchment boundary of RoI within lidar extent
         catchment_boundary = get_data_by_id(engine, CATCHMENT, i)
         # to check if already exist in hydro_dem table, if exist_ok, run and update, else pass
+        create_table(engine, DEM)
         exist_ok = (get_data_by_id(engine, DEM, i, geom_col="")).empty or update
 
         if (
@@ -621,7 +635,7 @@ def run(
             t_start = datetime.now()
             try:
                 single_instructions = single_process(
-                    engine, instructions, i, mode=mode, update=update, buffer=buffer
+                    engine, instructions, i, mode=mode, buffer=buffer
                 )
             except Exception as e:
                 logger.exception(f"Catchment {i} failed. Error message:\n{e}")
@@ -633,11 +647,7 @@ def run(
                 continue
             t_end = datetime.now()
             if single_instructions:
-                if not store_hydro_to_db(engine, single_instructions):
-                    logger.warning(
-                        f"Catchment {i} failed. Jump to generate next catchment."
-                    )
-                    continue
+                store_hydro_to_db(engine, single_instructions)
             else:
                 logger.error(
                     f"Catchment {i} failed. No instructions generated. Please check."
@@ -650,16 +660,28 @@ def run(
             # save lidar extent to check on QGIS
             if gpkg:
                 gpkg_file = (
-                    Path(utils.get_env_variable("DATA_DIR"))
-                    / Path("gpkg")
-                    / Path("dem_extent.gpkg")
+                    pathlib.Path(utils.get_env_variable("DATA_DIR"))
+                    / pathlib.Path("gpkg")
+                    / pathlib.Path("dem_extent.gpkg")
                 )
                 if gpkg_file.exists():
                     exist_extent = gpd.read_file(gpkg_file, driver="GPKG")
                     current_extent = gpd.read_file(
-                        Path(single_instructions["dem"]["data_paths"]["local_cache"])
-                        / Path(single_instructions["dem"]["data_paths"]["subfolder"])
-                        / Path(f"{i}_extents.geojson"),
+                        pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "local_cache"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "subfolder"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "raw_dem_extents"
+                            ]
+                        ),
                         driver="GeoJSON",
                     )
                     dem_extent = pd.concat(
@@ -692,7 +714,7 @@ def run(
 
 
 def run_grid(
-    boundary_path: Union[str, Path] = None,
+    boundary_path: Union[str, pathlib.Path] = None,
     grid_id: Union[int, str, list] = None,
     mode: str = "api",
     buffer: float = 10,
@@ -715,10 +737,10 @@ def run_grid(
     :param gpkg: if True, save the raw dem extent as geopackage.
     """
     engine = utils.get_database()
-    data_dir = Path(utils.get_env_variable("DATA_DIR"))
-    dem_dir = Path(utils.get_env_variable("GRID_DIR"))
+    data_dir = pathlib.Path(utils.get_env_variable("DATA_DIR"))
+    dem_dir = pathlib.Path(utils.get_env_variable("GRID_DIR"))
     grid_path = data_dir / dem_dir
-    instructions_file = Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
+    instructions_file = pathlib.Path(utils.get_env_variable("INSTRUCTIONS_FILE"))
     with open(instructions_file, "r") as f:
         instructions = json.loads(f.read())
 
@@ -732,28 +754,22 @@ def run_grid(
         logger.info(
             f"There are {len(grid_id)} Grids that intersect with ROI boundary.\n{grid_id}"
         )
+
     elif grid_id is not None:
         if isinstance(grid_id, str):
             assert grid_id.isdigit(), "Input grid_id must be integer string."
         grid_id = grid_id if isinstance(grid_id, list) else [grid_id]
         grid_id = [int(i) for i in grid_id]
+
     else:
         _gdf = pd.read_sql(f"SELECT grid_id FROM {GRID.__tablename__} ;", engine)
         grid_id = sorted(_gdf["grid_id"].to_list())
         logger.info(f"******* FULL GRID MODE ********* {len(grid_id)} GRID in total.")
 
-    lidar_extent_path = (
-        Path(utils.get_env_variable("DATA_DIR"))
-        / Path("gpkg")
-        / Path("lidar_extent.gpkg")
-    )
-    if lidar_extent_path.is_file():
-        lidar_extent = gpd.read_file(lidar_extent_path)
-    else:
-        # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
-        lidar_extent = utils.gen_table_extent(engine, DATASET)
-        # save lidar extent to check on QGIS
-        utils.save_gpkg(lidar_extent, "lidar_extent")
+    # generate lidar extent of all lidar datasets, to filter out catchments without lidar data
+    lidar_extent = utils.gen_table_extent(engine, DATASET)
+    # save lidar extent to check on QGIS
+    utils.save_gpkg(lidar_extent, "lidar_extent")
 
     if start is not None:
         if int(start) in grid_id:
@@ -767,33 +783,18 @@ def run_grid(
     failed = []
     create_table(engine, GRIDDEM)
 
-    # to check if catchment boundary of RoI within land extent
-    gdf_land = gpd.read_file(
-        (Path(data_dir) / Path(utils.get_env_variable("LAND_FILE"))), driver="GeoJSON"
-    )
-    if gdf_land.crs.to_epsg() != 2193:
-        gdf_land.to_crs(2193, inplace=True)
-    gdf_land = gpd.GeoDataFrame(index=[0], geometry=[gdf_land.unary_union], crs=2193)
-
     logger.info(
         f"******* Start process from grid_id {sorted(grid_id)[0]} to {sorted(grid_id)[-1]} *********"
     )
     for i in grid_id:
         # to check if catchment boundary of RoI within lidar extent
         grid_boundary = get_data_by_id(engine, GRID, i, index_column="grid_id")
-        # to check if already exist in grid table and within land extent, if exist_ok is ture, run and update, else pass
-        intersect_ok = (
-            lidar_extent.buffer(buffer).intersects(grid_boundary).any()
-            and gdf_land.buffer(buffer).intersects(grid_boundary).any()
-        )
+        # to check if already exist in hydro_dem table, if exist_ok, run and update, else pass
         exist_ok = (
-            update
-            or (
-                get_data_by_id(engine, GRIDDEM, i, geom_col="", index_column="grid_id")
-            ).empty
-        )
+            get_data_by_id(engine, GRIDDEM, i, geom_col="", index_column="grid_id")
+        ).empty or update
 
-        if intersect_ok and exist_ok:
+        if lidar_extent.buffer(buffer).intersects(grid_boundary).any() and exist_ok:
             # generate grid boundary file for each grid
             utils.gen_boundary_file(grid_path, grid_boundary, i)
             # generate raw dem for each grid
@@ -825,16 +826,28 @@ def run_grid(
             # save lidar extent to check on QGIS
             if gpkg:
                 gpkg_file = (
-                    Path(utils.get_env_variable("DATA_DIR"))
-                    / Path("gpkg")
-                    / Path("grid_extent.gpkg")
+                    pathlib.Path(utils.get_env_variable("DATA_DIR"))
+                    / pathlib.Path("gpkg")
+                    / pathlib.Path("grid_extent.gpkg")
                 )
                 if gpkg_file.exists():
                     exist_extent = gpd.read_file(gpkg_file, driver="GPKG")
                     current_extent = gpd.read_file(
-                        Path(single_instructions["dem"]["data_paths"]["local_cache"])
-                        / Path(single_instructions["dem"]["data_paths"]["subfolder"])
-                        / Path(f"{i}_extents.geojson"),
+                        pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "local_cache"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "subfolder"
+                            ]
+                        )
+                        / pathlib.Path(
+                            single_instructions["instructions"]["data_paths"][
+                                "raw_dem_extents"
+                            ]
+                        ),
                         driver="GeoJSON",
                     )
                     dem_extent = pd.concat(
