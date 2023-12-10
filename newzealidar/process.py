@@ -15,7 +15,6 @@ import os
 from pathlib import Path, PurePosixPath
 from datetime import datetime, timedelta
 from typing import Union
-import shutil
 
 import geopandas as gpd
 import pandas as pd
@@ -168,16 +167,19 @@ def single_process(
         )
         return None
 
-    raw_path = (
-        Path(instructions["dem"]["data_paths"]["local_cache"])
-        / Path(instructions["dem"]["data_paths"]["subfolder"])
-        / Path(instructions["dem"]["data_paths"]["raw_dem"])
+    dir_path = Path(instructions["dem"]["data_paths"]["local_cache"]) / Path(
+        instructions["dem"]["data_paths"]["subfolder"]
     )
+    raw_dem_path = dir_path / Path(instructions["dem"]["data_paths"]["raw_dem"])
+    result_dem_path = dir_path / Path(instructions["dem"]["data_paths"]["result_dem"])
+    dem_extent_path = dir_path / Path(f"{index}_extents.geojson")
 
     if update:
-        shutil.rmtree(raw_path.parent)
+        raw_dem_path.unlink(missing_ok=True)
+        result_dem_path.unlink(missing_ok=True)
+        dem_extent_path.unlink(missing_ok=True)
 
-    if not raw_path.exists():
+    if not raw_dem_path.exists():
         from_instructions_dict(instructions)
 
     gc.collect()
