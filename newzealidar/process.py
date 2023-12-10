@@ -15,6 +15,7 @@ import os
 from pathlib import Path, PurePosixPath
 from datetime import datetime, timedelta
 from typing import Union
+import shutil
 
 import geopandas as gpd
 import pandas as pd
@@ -174,7 +175,7 @@ def single_process(
     )
 
     if update:
-        raw_path.unlink(missing_ok=True)
+        shutil.rmtree(raw_path.parent)
 
     if not raw_path.exists():
         from_instructions_dict(instructions)
