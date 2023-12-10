@@ -32,7 +32,11 @@ supported_drivers["LIBKML"] = "rw"
 
 def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
     """Get extent geometry from kml file."""
-    file = pathlib.Path(item["extent_path"])
+    file = (
+        pathlib.Path(utils.get_env_variable("DATA_DIR"))
+        / pathlib.Path(utils.get_env_variable("LIDAR_DIR"))
+        / pathlib.Path(item["extent_path"])
+    )
     file = file.parent / pathlib.Path("tmp_datasets__" + str(file.name))
     if os.path.exists(file):
         gdf = gpd.read_file(file)
@@ -41,7 +45,12 @@ def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
         # if the dataset does not provide the extent file, use the tile index file to get the extent.
         # do not suggest to use this method, because read and transform tile index file to geometry is slow.
         # the tile index file will not exist if lidar.py does not download the tile index file.
-        if os.path.exists(item["tile_path"]):
+        file1 = (
+            pathlib.Path(utils.get_env_variable("DATA_DIR"))
+            / pathlib.Path(utils.get_env_variable("LIDAR_DIR"))
+            / pathlib.Path(item["tile_path"])
+        )
+        if os.path.exists(file1):
             logger.warning(
                 f"Extent file {file} is not exist, will use tile index geometry to generate dataset extent."
             )
@@ -57,7 +66,7 @@ def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
             gdf = gpd.GeoDataFrame(index=[0], crs="epsg:2193", geometry=[geom])
         else:  # even file not exists, do not change item['tile_path'] to empty
             logger.warning(
-                f'Extent file {file} and tile index file {item["tile_path"]} are not available, '
+                f"Extent file {file} and tile index file {file1} are not available, "
                 f"use empty geometry."
             )
             gdf = gpd.GeoDataFrame(index=[0], crs="epsg:2193", geometry=[Polygon()])
@@ -325,17 +334,18 @@ def crawl_dataset() -> None:
             "Chrome/34.0.1847.131 Safari/537.36",
             "DOWNLOAD_DELAY": 1.5,  # to avoid request too frequently and get incomplete response.
             "ITEM_PIPELINES": {"newzealidar.datasets.ExtraFilesPipeline": 1},
-            "FILES_STORE": "./",
+            "FILES_STORE": f"{pathlib.Path(utils.get_env_variable('DATA_DIR')) / pathlib.Path(utils.get_env_variable('LIDAR_DIR'))}",
             "LOG_LEVEL": "INFO",
         }
     )
     process.crawl(
         DatasetSpider,
         # data_dir for DatasetSpider init
-        str(
-            pathlib.Path(utils.get_env_variable("DATA_DIR"))
-            / pathlib.Path(utils.get_env_variable("LIDAR_DIR"))
-        ),
+        # str(
+        #    pathlib.Path(utils.get_env_variable("DATA_DIR"))
+        #    / pathlib.Path(utils.get_env_variable("LIDAR_DIR"))
+        # ),
+        r"./",
     )
     process.start()
     time.sleep(180)  # sleep 3 minutes for scrapy to finish downloading files.
