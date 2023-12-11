@@ -167,15 +167,7 @@ def single_process(
         )
         return None
 
-    dir_path = Path(instructions["dem"]["data_paths"]["local_cache"]) / Path(
-        instructions["dem"]["data_paths"]["subfolder"]
-    )
-    raw_dem_path = dir_path / Path(instructions["dem"]["data_paths"]["raw_dem"])
-    result_dem_path = dir_path / Path(instructions["dem"]["data_paths"]["result_dem"])
-    dem_extent_path = dir_path / Path(f"{index}_extents.geojson")
-
-    if not raw_dem_path.exists():
-        from_instructions_dict(instructions)
+    from_instructions_dict(instructions)
 
     gc.collect()
     return single_instructions
