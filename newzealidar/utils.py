@@ -788,10 +788,10 @@ def gen_key_extent(
     else:
         query = f"""SELECT * FROM {table} WHERE {column} = '{key}' ;"""
     gdf = gpd.read_postgis(query, engine, geom_col="geometry")
-    geometry = gdf["geometry"].unary_union
+    geom = gdf["geometry"].unary_union
     if filter_it:
-        geom = filter_geometry(geometry)
-        gdf = gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
+        geom = filter_geometry(geom)
+    gdf = gpd.GeoDataFrame(index=[0], crs=gdf.crs, geometry=[geom])
     return gdf
 
 
