@@ -72,7 +72,7 @@
       "propagate": false
     },
     "newzealidar.catchments": {
-      "level": "DEBUG",
+      "level": "INFO",
       "handlers": [
         "console",
         "info_file_handler",
@@ -126,6 +126,15 @@
       "propagate": false
     },
     "newzealidar.tables": {
+      "level": "INFO",
+      "handlers": [
+        "console",
+        "info_file_handler",
+        "error_file_handler"
+      ],
+      "propagate": false
+    },
+    "newzealidar.rivers": {
       "level": "INFO",
       "handlers": [
         "console",
