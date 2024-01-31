@@ -9,7 +9,7 @@ dependencies:
   - python-dotenv
   - pytest
   - lxml
-  - pandas
+  - pandas<2.2
   - geopandas
   - rasterio
   - geojson
@@ -20,7 +20,7 @@ dependencies:
   - shapely
   - osmnx
   - psycopg2
-  - sqlalchemy<2.0  # v2.0 does not supported by some packages yet.
+  - sqlalchemy<2.0  # v2.0 does not supported by pandas 2.1.x packages yet.
   - geoalchemy2
   - scrapy
   - dask
