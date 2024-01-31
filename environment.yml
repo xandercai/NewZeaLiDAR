@@ -18,12 +18,14 @@ dependencies:
   - gdal
   - pygeos
   - shapely
+  - osmnx
   - psycopg2
   - sqlalchemy<2.0  # v2.0 does not supported by some packages yet.
   - geoalchemy2
   - scrapy
   - dask
   - bokeh!=3.0.*,>=2.4.2  # for Dask dashboard
+  - leafmap  # for jupyter notebook, delete it if no need
   - pip:
     - geofabrics==1.0.0
 prefix:
