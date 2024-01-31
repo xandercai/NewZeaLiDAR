@@ -253,9 +253,9 @@ def drop_z(ds: gpd.GeoSeries) -> gpd.GeoSeries:
 
 
 def gen_boundary_file(
-    data_path: Union[str, Path],
-    gdf_boundary: gpd.GeoDataFrame,
-    index: Union[int, str],
+    data_path: Union[str, Path] = None,
+    gdf_boundary: gpd.GeoDataFrame = None,
+    index: Union[int, str] = None,
     buffer: Union[int, float] = 0,
     crs: str = "2193",
     save_file: Union[str, Path] = None,
@@ -278,14 +278,18 @@ def gen_boundary_file(
         lambda x: shapely.wkt.loads(shapely.wkt.dumps(x, rounding_precision=4))
     )
 
-    feature = geojson.Feature(geometry=gdf_boundary["geometry"][0], properties={})
+    feature = geojson.Feature(
+        id=index, geometry=gdf_boundary["geometry"].values[0], properties={}
+    )
     feature_collection = geojson.FeatureCollection(
         [feature], name="selected_polygon", crs=feature_crs
     )
-    if save_file is None:
+    if data_path is not None and index is not None:
         file_path = Path(data_path) / Path(f"{index}") / Path(f"{index}.geojson")
-    else:
+    elif save_file is not None:
         file_path = Path(save_file)
+    else:
+        raise ValueError("Either data_path and index, or save_file must be provided.")
     file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "w") as f:
         geojson.dump(feature_collection, f, indent=2)
@@ -317,7 +321,7 @@ def map_dataset_name(engine: Engine, instructions_file: Union[str, Path]) -> Non
 
 def get_geometry_from_file(
     boundary_file: Union[str, Path], buffer: Union[int, float] = 0
-) -> shapely.geometry:
+) -> shapely.Geometry:
     """
     Read boundary geometry boundary_file, and return the buffered geometry.
     """
@@ -338,7 +342,7 @@ def get_geometry_from_db(
     column: Union[str, int],
     value: Union[str, int],
     buffer: Union[int, float] = 0,
-) -> shapely.geometry:
+) -> shapely.Geometry:
     """
     return the buffered geometry by column value of table (catch_id, name, etc.).
     """
@@ -650,7 +654,7 @@ def filter_geometry(
 
 # @timeit
 def fishnet(
-    geometry: shapely.geometry, threshold: Union[int, float], lrbu=False
+    geometry: shapely.Geometry, threshold: Union[int, float], lrbu=False
 ) -> list:
     """
     create fishnet grid based on the geometry and threshold
@@ -699,7 +703,7 @@ def fishnet(
 
 # @timeit
 def katana(
-    geometry: shapely.geometry, threshold: Union[int, float], count: int = 0
+    geometry: shapely.Geometry, threshold: Union[int, float], count: int = 0
 ) -> list:
     """Split a Polygon into two parts across its shortest dimension if area is greater than threshold."""
     bounds = geometry.bounds
@@ -796,7 +800,7 @@ def gen_key_extent(
 
 
 def check_roi_dem_exist(
-    engine: Engine, geometry: Union[gpd.GeoDataFrame, shapely.geometry]
+    engine: Engine, geometry: Union[gpd.GeoDataFrame, shapely.Geometry]
 ) -> tuple:
     """
     check if the ROI DEM is in the database.
@@ -821,9 +825,7 @@ def check_roi_dem_exist(
         )
         return gdf, tables.USERDEM.__tablename__
 
-    # ensure DEMATTR table exists
-    tables.create_table(engine, tables.DEMATTR)
-    # check pre-defined catchment DEM table then
+    # check pre-generated catchment DEM table then
     gdf = tables.get_catchment_by_geometry(
         engine,
         tables.DEMATTR,
@@ -912,7 +914,7 @@ def get_dem_by_geometry(
         hydro_dem_path = user_dem["hydro_dem_path"].values[0]
         extent_path = user_dem["extent_path"].values[0]
         resolution = user_dem["resolution"].values[0]
-    # contains by catchment DEMs, need clip
+    # contains by catchment DEMs, need merge or clip
     elif table_name == tables.DEMATTR.__tablename__:
         clipped_gdf = clip_dem(engine, gdf, geometry, index=index)
         raw_dem_path = clipped_gdf["raw_dem_path"].values[0]
@@ -961,7 +963,7 @@ def get_dem_band_and_resolution_by_geometry(
             return hydro_dem, res_no
 
 
-def clip_netcdf(file_list: list, save_file: Path, geometry: shapely.geometry) -> None:
+def clip_netcdf(file_list: list, save_file: Path, geometry: shapely.Geometry) -> None:
     """ "
     Clip netcdf file by geometry
     """
@@ -989,7 +991,7 @@ def gen_clipped_data(
     df: pd.DataFrame,
     gdf: gpd.GeoDataFrame,
     save_dir: Path,
-    geometry: shapely.geometry,
+    geometry: shapely.Geometry,
 ):
     """
     Generate clipped netcdf file
@@ -1030,12 +1032,15 @@ def gen_clipped_data(
 def clip_dem(
     engine: Engine,
     gdf: gpd.GeoDataFrame,
-    geometry: shapely.geometry,
+    geometry: shapely.Geometry,
     index: Union[int, str] = None,
+    table: Type[Ttable] = None,
 ) -> pd.DataFrame:
     """
     Generate clipped DEM from DEM table.
     """
+    table = tables.USERDEM if table is None else table
+
     if index is None:
         index = f"{datetime.now():%Y%m%d%H%M%S}"[
             -10:
@@ -1057,25 +1062,115 @@ def clip_dem(
         gdf
     ), f"Retrieve {len(df)} in DEM table, while retrieve {len(gdf)} in DEMATTR table."
     clipped_dem_geometry = gen_clipped_data(index, df, gdf, clipped_dem_path, geometry)
-    gdf_to_db = gpd.GeoDataFrame(
+    if table == tables.USERDEM:
+        gdf_to_db = gpd.GeoDataFrame(
+            {
+                "catch_id": int(index),
+                "resolution": gdf["resolution"].values[0],
+                "raw_dem_path": (
+                    clipped_dem_path / Path(f"{index}_raw_dem.nc")
+                ).as_posix(),
+                "hydro_dem_path": (clipped_dem_path / Path(f"{index}.nc")).as_posix(),
+                "extent_path": (
+                    clipped_dem_path / Path(f"{index}_extent.geojson")
+                ).as_posix(),
+                "raw_geometry": geometry,
+                "geometry": clipped_dem_geometry,
+                "created_at": datetime.now(),
+            },
+            index=[0],
+            crs="epsg:2193",
+        )
+        tables.create_table(engine, table)
+        gdf_to_db.to_postgis(
+            table.__tablename__, engine, if_exists="append", index=False
+        )
+        logger.info(
+            f"Add new {index} in {tables.USERDEM.__tablename__} at {datetime.now()}."
+        )
+
+    elif table == tables.DEM:
+        query = f"SELECT * FROM {tables.DEM.__tablename__} WHERE catch_id = '{index}' ;"
+        df_from_db = pd.read_sql(query, engine)
+        if not df_from_db.empty:
+            query = f"""UPDATE {tables.DEM.__tablename__}
+                        SET raw_dem_path = '{(clipped_dem_path / (f"{index}_raw_dem.nc")).as_posix()}',
+                            hydro_dem_path = '{(clipped_dem_path / Path(f"{index}.nc")).as_posix()}',
+                            extent_path = '{(clipped_dem_path / Path(f"{index}_extent.geojson")).as_posix()}',
+                            updated_at = '{pd.Timestamp.now()}'
+                        WHERE catch_id = '{index}' ;"""
+            engine.execute(query)
+            logger.info(
+                f"Updated {index} in {tables.DEM.__tablename__} at {datetime.now()}."
+            )
+        else:
+            query = f"""INSERT INTO {tables.DEM.__tablename__} (
+                        catch_id,
+                        raw_dem_path,
+                        hydro_dem_path,
+                        extent_path,
+                        created_at,
+                        updated_at
+                        ) VALUES (
+                        {index},
+                        '{(clipped_dem_path / f"{index}_raw_dem.nc").as_posix()}',
+                        '{(clipped_dem_path / Path(f"{index}.nc")).as_posix()}',
+                        '{(clipped_dem_path / Path(f"{index}_extent.geojson")).as_posix()}',
+                        '{pd.Timestamp.now()}',
+                        '{pd.Timestamp.now()}'
+                        ) ;"""
+            engine.execute(query)
+
+        # hydrologically conditioned DEM geometry table, to faster query
+        query = f"SELECT catch_id FROM {tables.DEMATTR.__tablename__} WHERE catch_id = '{index}' ;"
+        df_from_db = pd.read_sql(query, engine)
+        if not df_from_db.empty:
+            query = f"""UPDATE {tables.DEMATTR.__tablename__}
+                        SET raw_geometry = '{geometry}',
+                            resolution = '{gdf["resolution"].values[0]}',
+                            geometry = '{clipped_dem_geometry}',
+                            updated_at = '{datetime.now()}'
+                        WHERE catch_id = '{index}' ;"""
+            engine.execute(query)
+            logger.info(
+                f"Updated {index} in {tables.DEMATTR.__tablename__} at {datetime.now()}."
+            )
+        else:
+            query = f"""INSERT INTO {tables.DEMATTR.__tablename__} (
+                        catch_id,
+                        resolution,
+                        raw_geometry,
+                        geometry,
+                        created_at,
+                        updated_at
+                        ) VALUES (
+                        {index},
+                        '{gdf["resolution"]}',
+                        '{geometry}',
+                        '{clipped_dem_geometry}',
+                        '{pd.Timestamp.now()}',
+                        '{pd.Timestamp.now()}'
+                        ) ;"""
+            engine.execute(query)
+        logger.info(
+            f"Add new {index} in {tables.DEMATTR.__tablename__} at {datetime.now()}."
+        )
+
+    # to return the geometry for calling function
+    gdf_result = gpd.GeoDataFrame(
         {
-            "catch_id": int(index),
             "resolution": gdf["resolution"].values[0],
-            "raw_dem_path": str(clipped_dem_path / Path(f"{index}_raw_dem.nc")),
-            "hydro_dem_path": str(clipped_dem_path / Path(f"{index}.nc")),
-            "extent_path": str(clipped_dem_path / Path(f"{index}_extent.geojson")),
-            "raw_geometry": geometry,
-            "geometry": clipped_dem_geometry,
-            "created_at": datetime.now(),
+            "raw_dem_path": (clipped_dem_path / Path(f"{index}_raw_dem.nc")).as_posix(),
+            "hydro_dem_path": (clipped_dem_path / Path(f"{index}.nc")).as_posix(),
+            "extent_path": (
+                clipped_dem_path / Path(f"{index}_extent.geojson")
+            ).as_posix(),
         },
         index=[0],
         crs="epsg:2193",
     )
-    tables.create_table(engine, tables.USERDEM)
-    gdf_to_db.to_postgis(
-        tables.USERDEM.__tablename__, engine, if_exists="append", index=False
-    )
-    return gdf_to_db
+
+    return gdf_result
 
 
 def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
@@ -1089,20 +1184,28 @@ def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
         file_name = f"{file.__tablename__}.gpkg"
     Path(gpkg_path).mkdir(parents=True, exist_ok=True)
     gdf.set_crs(epsg=2193, inplace=True)
-    gdf.to_file(str(gpkg_path / Path(file_name)), driver="GPKG")
+    gdf.to_file((gpkg_path / Path(file_name)).as_posix(), driver="GPKG")
     logger.info(f"Save source catchments to {gpkg_path / Path(file_name)}.")
 
 
-def make_valid(geometry: shapely.geometry) -> shapely.geometry:
+def make_valid(
+    data: Union[gpd.GeoDataFrame, shapely.Geometry]
+) -> Union[gpd.GeoDataFrame, shapely.Geometry]:
     """
     Returns a valid representation of the object.
     """
-    if geometry.is_valid:
-        return geometry
-    return shapely.make_valid(geometry)
+    if isinstance(data, gpd.GeoDataFrame):
+        if not data.is_valid.all():
+            return data.buffer(0)
+
+    if isinstance(data, shapely.Geometry):
+        if not data.is_valid:
+            return shapely.make_valid(data)
+
+    return data
 
 
-def get_min_width(geometry: shapely.geometry) -> float:
+def get_min_width(geometry: shapely.Geometry) -> float:
     """
     Get minimum width of the geometry
     """
