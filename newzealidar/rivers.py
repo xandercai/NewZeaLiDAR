@@ -28,7 +28,7 @@ ox.settings.cache_folder = os.path.expanduser("~/.cache/osmnx")
 # Enable or disable the cache
 ox.settings.use_cache = True  # osmnx default is True
 # Enable print console log
-ox.settings.log_console = True
+ox.settings.log_console = False
 
 logger = logging.getLogger(__name__)
 
