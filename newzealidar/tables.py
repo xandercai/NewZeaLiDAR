@@ -82,7 +82,7 @@ class TILE(Base):
 class CATCHMENT(Base):
     __tablename__: str = "catchment"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -94,7 +94,7 @@ class CATCHMENT(Base):
 class CATCHTEMP(Base):
     __tablename__: str = "catchment_temporary"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -106,7 +106,7 @@ class CATCHTEMP(Base):
 class CATCHMENTG(Base):
     __tablename__: str = "catchment_gap"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -119,7 +119,7 @@ class CATCHMENTG(Base):
 class DEM(Base):
     __tablename__: str = "hydro_dem"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     raw_dem_path = Column(String, comment="raw DEM file path")
     hydro_dem_path = Column(String, comment="hydrologically conditioned DEM file path")
@@ -132,13 +132,28 @@ class DEM(Base):
 class DEMATTR(Base):
     __tablename__: str = "hydro_dem_attribute"
     catch_id = Column(
-        Integer, primary_key=True, comment="selected area index"
+        Integer, primary_key=True, comment="selected catchment index"
     )  # catchment region id
     resolution = Column(Float, comment="DEM resolution in meters")
     raw_geometry = Column(
         Geometry("Geometry", srid="2193"), comment="instruction extent geometry"
     )
     geometry = Column(Geometry("Geometry", srid="2193"), comment="DEM extent geometry")
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+
+class RIVER(Base):
+    __tablename__: str = "river"
+    catch_id = Column(
+        Integer, primary_key=True, comment="catchment index"
+    )  # catchment region id
+    rec_id = Column(Integer, comment="REC1 NZREACH")
+    osm_id = Column(Integer, comment="OSM ID")
+    rec_geometry = Column(
+        Geometry("Geometry", srid="2193"), comment="REC1 NZREACH geometry"
+    )
+    osm_geometry = Column(Geometry("Geometry", srid="2193"), comment="OSM ID geometry")
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -161,7 +176,7 @@ class USERDEM(Base):
 class SDC(Base):
     __tablename__: str = "sea_draining_catchment"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -174,7 +189,7 @@ class SDC(Base):
 class SDCS(Base):
     __tablename__: str = "sea_draining_catchment_split"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     super_id = Column(Integer, comment="superior catchment area index")
     area = Column(Float, comment="catchment area in square meters")
@@ -188,7 +203,7 @@ class SDCS(Base):
 class SDCP(Base):
     __tablename__: str = "sea_draining_catchment_processed"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -201,7 +216,7 @@ class SDCP(Base):
 class SDCG(Base):
     __tablename__: str = "sea_draining_catchment_gap"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -214,7 +229,7 @@ class SDCG(Base):
 class ORDER5(Base):
     __tablename__: str = "order5_catchment"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -227,7 +242,7 @@ class ORDER5(Base):
 class ORDER5P(Base):
     __tablename__: str = "order5_catchment_processed"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -240,7 +255,7 @@ class ORDER5P(Base):
 class ORDER4(Base):
     __tablename__: str = "order4_catchment"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -253,7 +268,7 @@ class ORDER4(Base):
 class ORDER4P(Base):
     __tablename__: str = "order4_catchment_processed"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -266,7 +281,7 @@ class ORDER4P(Base):
 class COAST(Base):
     __tablename__: str = "coast_catchment"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
     area = Column(Float, comment="catchment area in square meters")
     geometry = Column(
@@ -279,7 +294,7 @@ class COAST(Base):
 class RUNTIME(Base):
     __tablename__: str = "runtime"
     catch_id = Column(
-        Integer, primary_key=True, comment="catchment area index"
+        Integer, primary_key=True, comment="catchment index"
     )  # catchment region id
 
     runtime = Column(Interval, comment="timespan for the catchment processing")
