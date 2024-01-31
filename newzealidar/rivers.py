@@ -414,6 +414,9 @@ def run(engine: Engine, rec_path, coast_path, catch_table=None, update=False):
     table = tables.SDCP if catch_table is None else catch_table
 
     gdf_sdc = tables.read_postgis_table(engine, table)
+    tables.create_table(engine, tables.RIVER)
+    engine.dispose()
+    gc.collect()
 
     if Path(rec_path).is_file():
         if Path(rec_path).suffix == ".shp" or Path(rec_path).suffix == ".csv":
@@ -454,6 +457,7 @@ def run(engine: Engine, rec_path, coast_path, catch_table=None, update=False):
         )
         pool.close()
         pool.join()
+    logger.info(f"Finished process {tables.RIVER.__tablename__} at {pd.Timestamp.now()}.")
 
     # for i in catch_id:
     #     logger.info(f"*** Processing catchment {i} ***")
