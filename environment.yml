@@ -27,5 +27,5 @@ dependencies:
   - bokeh!=3.0.*,>=2.4.2  # for Dask dashboard
   - leafmap  # for jupyter notebook, delete it if no need
   - pip:
-    - geofabrics==1.0.0
+    - geofabrics==1.1.10
 prefix:

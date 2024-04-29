@@ -13,6 +13,7 @@ from newzealidar import (
     datasets_waikato,
     lidar,
     lidar_waikato,
+    rivers,
     process,
     tables,
     utils,
@@ -24,11 +25,11 @@ from newzealidar import (
 # selected catchments
 # catchment_list = [1599, 1547]
 # catchment_list = [13070004, 21599001]
-# catchment_list = 1394
+catchment_list = 1589
 # catchment_list = 50
 # full catchments
 # nz_mainland = r'./NewZeaLiDAR/configs/nz_mainland.geojson'
-demo = r"./configs/kaikoura.geojson"
+# demo = r"./configs/kaikoura.geojson"
 # catchment_list = -1
 buffer = 14
 
@@ -36,19 +37,21 @@ if __name__ == "__main__":
     logs.setup_logging()
     # logs.print_logger()
     # catchments.run(grid_only=True)
-    catchments.run()
-    datasets.run()
+    # catchments.run()
+    # datasets.run()
     # datasets_waikato.run()
     # lidar.run(roi_id=1581, grid=True)
     # lidar.run(roi_file=demo, buffer=buffer)
     # lidar.run(roi_id=catchment_list, buffer=buffer)
-    lidar.run(name_base=True, buffer=buffer)
+    # lidar.run(name_base=True, buffer=buffer)
     # lidar_waikato.run()
+    # rivers.run(catch_table=tables.SDCP, update=False)
     # process.run(catch_id=catchment_list, mode='api', gpkg=True)
-    # process.run(catch_id=catchment_list, mode='local', gpkg=True)
+    # process.run_hydro(catch_id=catchment_list, mode="local", gpkg=True)
     # process.run(catch_id=catchment_list, mode='api')
     # process.run(catch_id="2673", mode="local")
     # process.main(catchment_boundary=demo)
     # process.run_grid(grid_id=[120322, 120558], mode="local", gpkg=True)
-    process.run_grid(mode="local", gpkg=True)
-    tables.check_all_table_duplicate()
+    # process.run_grid(mode="local", gpkg=True)
+    process.run_hydro(catch_id=catchment_list, table=tables.SDCP, mode="api", gpkg=True)
+    # tables.check_all_table_duplicate()

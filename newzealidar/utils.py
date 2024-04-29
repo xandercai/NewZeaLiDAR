@@ -48,9 +48,7 @@ CATCHMENT_RESOLUTION = 30  # the resolution of the catchment in meters
 EPS = 0.1  # epsilon for float comparison
 
 
-def get_env_variable(
-    var_name: str, default: T = None, allow_empty: bool = False, cast_to: T = str
-) -> T:
+def get_env_variable(var_name: str, default: T = None, allow_empty: bool = False, cast_to: T = str) -> T:
     """
     Reads an environment variable, with settings to allow defaults, empty values, and type casting
     To read a boolean EXAMPLE_ENV_VAR=False use get_env_variable("EXAMPLE_ENV_VAR", cast_to=bool)
@@ -65,9 +63,7 @@ def get_env_variable(
     """
     env_var = os.getenv(var_name, default)
     if not allow_empty and env_var in (None, ""):
-        raise KeyError(
-            f"Environment variable {var_name} not set, and allow_empty is False"
-        )
+        raise KeyError(f"Environment variable {var_name} not set, and allow_empty is False")
     return _cast_str(env_var, cast_to)
 
 
@@ -91,16 +87,12 @@ def _cast_str(str_to_cast: str, cast_to: T) -> T:
             return True
         elif str_to_cast.lower() in false_values:
             return False
-        raise ValueError(
-            f"{str_to_cast} being casted to bool but is not in {truth_values} or {false_values}"
-        )
+        raise ValueError(f"{str_to_cast} being casted to bool but is not in {truth_values} or {false_values}")
     # General case
     return cast_to(str_to_cast)
 
 
-def get_database(
-    null_pool: bool = False, pool_pre_ping: bool = False
-) -> Type[create_engine]:
+def get_database(null_pool: bool = False, pool_pre_ping: bool = False) -> Type[create_engine]:
     """
     Exit the program if connection fails.
 
@@ -108,17 +100,13 @@ def get_database(
     :param pool_pre_ping: If True, enable pool_pre_ping to check database connection before using. Default is False.
     """
     try:
-        engine = get_connection_from_profile(
-            null_pool=null_pool, pool_pre_ping=pool_pre_ping
-        )
+        engine = get_connection_from_profile(null_pool=null_pool, pool_pre_ping=pool_pre_ping)
         return engine
     except ConnectionAbortedError:
         raise ConnectionAbortedError("Connection to database failed. Check .env file.")
 
 
-def get_connection_from_profile(
-    null_pool: bool = False, pool_pre_ping: bool = False
-) -> Type[create_engine]:
+def get_connection_from_profile(null_pool: bool = False, pool_pre_ping: bool = False) -> Type[create_engine]:
     """Sets up database connection from .env file."""
     connection_keys = [
         "POSTGRES_HOST",
@@ -127,15 +115,9 @@ def get_connection_from_profile(
         "POSTGRES_USER",
         "POSTGRES_PASSWORD",
     ]
-    host, port, db, username, password = (
-        get_env_variable(key) for key in connection_keys
-    )
+    host, port, db, username, password = (get_env_variable(key) for key in connection_keys)
     assert (
-        any(
-            connection_cred is None
-            for connection_cred in [host, port, db, username, password]
-        )
-        is False
+        any(connection_cred is None for connection_cred in [host, port, db, username, password]) is False
     ), "Error:: One or more of the connection credentials is missing."
     return get_engine(
         db,
@@ -216,16 +198,10 @@ def case_insensitive_rglob(directory: Union[str, Path], pattern: str) -> list:
     """case-insensitive rglob function."""
     path = Path(directory)
     assert path.is_dir(), f"{path} is not a directory."
-    return [
-        str(file.as_posix())
-        for file in path.rglob(pattern)
-        if fnmatch(file.name, pattern)
-    ]
+    return [str(file.as_posix()) for file in path.rglob(pattern) if fnmatch(file.name, pattern)]
 
 
-def get_files(
-    suffix: Union[str, list], file_path: Union[str, Path], expect: int = -1
-) -> Union[list, str]:
+def get_files(suffix: Union[str, list], file_path: Union[str, Path], expect: int = -1) -> Union[list, str]:
     """To get the path of all the files with filetype extension in the input file path."""
     list_file_path = []
     list_suffix = suffix if isinstance(suffix, list) else [suffix]
@@ -238,9 +214,7 @@ def get_files(
     elif expect == 1 and len(list_file_path) == 1:
         return list_file_path[0]
     else:
-        logger.error(
-            f"Find {len(list_file_path)} {suffix} files in {file_path}, where expect {expect}."
-        )
+        logger.error(f"Find {len(list_file_path)} {suffix} files in {file_path}, where expect {expect}.")
 
 
 def drop_z(ds: gpd.GeoSeries) -> gpd.GeoSeries:
@@ -265,9 +239,7 @@ def gen_boundary_file(
     Save to DATA_DIR/data_path/index/index.geojson.
     """
     if buffer > 0:  # not recommended, cause the original input boundary will be lost.
-        gdf_boundary["geometry"] = gdf_boundary["geometry"].buffer(
-            buffer, join_style="mitre"
-        )
+        gdf_boundary["geometry"] = gdf_boundary["geometry"].buffer(buffer, join_style="mitre")
     feature_crs = {
         "type": "name",
         "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs}"},
@@ -278,12 +250,8 @@ def gen_boundary_file(
         lambda x: shapely.wkt.loads(shapely.wkt.dumps(x, rounding_precision=4))
     )
 
-    feature = geojson.Feature(
-        id=index, geometry=gdf_boundary["geometry"].values[0], properties={}
-    )
-    feature_collection = geojson.FeatureCollection(
-        [feature], name="selected_polygon", crs=feature_crs
-    )
+    feature = geojson.Feature(id=index, geometry=gdf_boundary["geometry"].values[0], properties={})
+    feature_collection = geojson.FeatureCollection([feature], name="selected_polygon", crs=feature_crs)
     if data_path is not None and index is not None:
         file_path = Path(data_path) / Path(f"{index}") / Path(f"{index}.geojson")
     elif save_file is not None:
@@ -298,30 +266,22 @@ def gen_boundary_file(
 
 def map_dataset_name(engine: Engine, instructions_file: Union[str, Path]) -> None:
     """Mapping dataset name with its ordered id by publication date (and so on), and save in a json file."""
-    logger.info(
-        "Mapping dataset name with its ordered id by publication date (and so on)."
-    )
+    logger.info("Mapping dataset name with its ordered id by publication date (and so on).")
     query = f"SELECT name, survey_end_date, publication_date FROM dataset ;"
     df = pd.read_sql(query, engine)
     # latest dataset first, if same then by name
-    df = df.sort_values(
-        by=["publication_date", "survey_end_date", "name"], ascending=False
-    ).reset_index(drop=True)
+    df = df.sort_values(by=["publication_date", "survey_end_date", "name"], ascending=False).reset_index(drop=True)
     with open(instructions_file, "r") as f:
         instructions = json.load(f)
-        if not instructions["dem"].get("dataset_mapping"):
-            instructions["dem"]["dataset_mapping"] = {"lidar": {}}
-        instructions["dem"]["dataset_mapping"]["lidar"] = dict(
-            zip(df["name"], df.index + 1)
-        )
-        instructions["dem"]["dataset_mapping"]["lidar"]["Unknown"] = 0
+        if not instructions["default"].get("dataset_mapping"):
+            instructions["default"]["dataset_mapping"] = {"lidar": {}}
+        instructions["default"]["dataset_mapping"]["lidar"] = dict(zip(df["name"], df.index + 1))
+        instructions["default"]["dataset_mapping"]["lidar"]["Unknown"] = 0
     with open(instructions_file, "w") as f:
         json.dump(instructions, f, indent=2)
 
 
-def get_geometry_from_file(
-    boundary_file: Union[str, Path], buffer: Union[int, float] = 0
-) -> shapely.Geometry:
+def get_geometry_from_file(boundary_file: Union[str, Path], buffer: Union[int, float] = 0) -> shapely.Geometry:
     """
     Read boundary geometry boundary_file, and return the buffered geometry.
     """
@@ -329,11 +289,7 @@ def get_geometry_from_file(
     if "2193" not in str(gdf.crs):
         gdf = gdf.to_crs(epsg=2193)
     gdf["buffered"] = gdf["geometry"].buffer(buffer, join_style="mitre")
-    return (
-        gdf["geometry"].buffer(buffer, join_style="mitre").values[0]
-        if buffer != 0
-        else gdf["geometry"].values[0]
-    )
+    return gdf["geometry"].buffer(buffer, join_style="mitre").values[0] if buffer != 0 else gdf["geometry"].values[0]
 
 
 def get_geometry_from_db(
@@ -357,9 +313,7 @@ def get_geometry_from_db(
     return geom.buffer(buffer, join_style="mitre") if buffer != 0 else geom
 
 
-def get_extent_from_dem(
-    dem_file: Union[str, Path], extent_file: Union[str, Path] = None
-):
+def get_extent_from_dem(dem_file: Union[str, Path], extent_file: Union[str, Path] = None):
     """
     get the extent of the dem netcdf file.
     """
@@ -438,9 +392,7 @@ def retrieve_dataset(
     gdf = gdf.sort_values(sort_by, ascending=False)  # latest/largest first
     dataset_name_list = gdf["name"].to_list()
     tile_path_list = gdf["tile_path"].to_list()
-    dataset_list = [
-        (n, {"crs": {"horizontal": 2193, "vertical": 7839}}) for n in dataset_name_list
-    ]
+    dataset_list = [(n, {"crs": {"horizontal": 2193, "vertical": 7839}}) for n in dataset_name_list]
     return OrderedDict(dataset_list), geometry, tile_path_list, dataset_name_list
 
 
@@ -457,9 +409,7 @@ def retrieve_lidar(
     then retrieve the .laz file path, tile index file from tile table and lidar table,
     in the end return a dictionary of dataset name, crs, .laz file path and tile index file.
     """
-    datasets_dict, geometry, tile_path_list, _ = retrieve_dataset(
-        engine, boundary_file, sort_by, buffer=buffer
-    )
+    datasets_dict, geometry, tile_path_list, _ = retrieve_dataset(engine, boundary_file, sort_by, buffer=buffer)
     list_pop_dataset = []
     for dataset_name in datasets_dict.keys():
         query = f"""SELECT uuid, geometry FROM tile
@@ -474,11 +424,7 @@ def retrieve_lidar(
             )
             list_pop_dataset.append(dataset_name)
             continue
-        uuid = (
-            tuple(gdf["uuid"].to_list())
-            if len(gdf) > 1
-            else str(f"""('{gdf["uuid"].values[0]}')""")
-        )
+        uuid = tuple(gdf["uuid"].to_list()) if len(gdf) > 1 else str(f"""('{gdf["uuid"].values[0]}')""")
         query = f"SELECT file_path FROM lidar WHERE uuid IN {uuid} ;"
         df = pd.read_sql(query, engine)
         if df.empty:
@@ -488,9 +434,7 @@ def retrieve_lidar(
             )
             list_pop_dataset.append(dataset_name)
             continue
-        datasets_dict[dataset_name]["file_paths"] = [
-            PurePosixPath(p) for p in sorted(df["file_path"].to_list())
-        ]
+        datasets_dict[dataset_name]["file_paths"] = [PurePosixPath(p) for p in sorted(df["file_path"].to_list())]
         if "LiDAR_" in dataset_name:  # to handle waikato datasets
             _dataset_name = "_".join(dataset_name.split("_")[:2])
             datasets_dict[dataset_name]["tile_index_file"] = [
@@ -529,9 +473,7 @@ def retrieve_catchment(
     """
     if gdf is not None:
         geometry = (
-            gdf["geometry"].values[0].buffer(buffer, join_style="mitre")
-            if buffer != 0
-            else gdf["geometry"].values[0]
+            gdf["geometry"].values[0].buffer(buffer, join_style="mitre") if buffer != 0 else gdf["geometry"].values[0]
         )
     if boundary_file is not None:
         geometry = get_geometry_from_file(boundary_file, buffer=buffer)
@@ -539,9 +481,7 @@ def retrieve_catchment(
                 WHERE ST_Intersects(geometry, ST_SetSRID('{geometry}'::geometry, 2193)) ;"""
     gdf = gpd.read_postgis(query, engine, geom_col="geometry")
     catch_list = sorted(gdf["catch_id"].to_list())
-    logger.info(
-        f"Retrieved {len(catch_list)} catchments from catchment table:\n{catch_list}"
-    )
+    logger.info(f"Retrieved {len(catch_list)} catchments from catchment table:\n{catch_list}")
     return catch_list
 
 
@@ -589,9 +529,7 @@ def remove_holes(
             if p.area > keep_threshold:
                 list_interiors.append(interior)
 
-        temp_polygon = Polygon(geom.exterior.coords, holes=list_interiors).buffer(
-            0, join_style="mitre"
-        )
+        temp_polygon = Polygon(geom.exterior.coords, holes=list_interiors).buffer(0, join_style="mitre")
         # check validity
         # temp_polygon = make_valid(temp_polygon)
         list_parts.append(temp_polygon)
@@ -601,9 +539,7 @@ def remove_holes(
 
 
 def filter_geometry(
-    geometry: Union[
-        shapely.Geometry, Polygon, MultiPolygon, GeometryCollection, gpd.GeoSeries
-    ],
+    geometry: Union[shapely.Geometry, Polygon, MultiPolygon, GeometryCollection, gpd.GeoSeries],
     resolution: Union[int, float] = CATCHMENT_RESOLUTION,
     polygon_threshold: Union[int, float] = 100 * 100,
     hole_threshold: Union[int, float] = 1_000 * 1_000,
@@ -626,25 +562,17 @@ def filter_geometry(
         raise ValueError("geometry is not a valid type", type(geometry))
     # remove polygons the under threshold
     if isinstance(geometry, Polygon):
-        assert (
-            geometry.area >= polygon_threshold
-        ), "Input geometry is smaller than threshold."
+        assert geometry.area >= polygon_threshold, "Input geometry is smaller than threshold."
     else:
-        geometry = MultiPolygon(
-            [p for p in geometry.geoms if p.area > polygon_threshold]
-        )
+        geometry = MultiPolygon([p for p in geometry.geoms if p.area > polygon_threshold])
     # remove spikes
     geometry = (
-        geometry.buffer(-EPS, join_style="mitre")
-        .buffer(EPS * 2, join_style="mitre")
-        .buffer(-EPS, join_style="mitre")
+        geometry.buffer(-EPS, join_style="mitre").buffer(EPS * 2, join_style="mitre").buffer(-EPS, join_style="mitre")
     )
     # clean geometry boundary
     eps = resolution / 2 - EPS
     geometry = (
-        geometry.buffer(eps, join_style="mitre")
-        .buffer(-eps * 2, join_style="mitre")
-        .buffer(eps, join_style="mitre")
+        geometry.buffer(eps, join_style="mitre").buffer(-eps * 2, join_style="mitre").buffer(eps, join_style="mitre")
     )
     # remove holes
     geometry = remove_holes(geometry, keep_threshold=hole_threshold)
@@ -653,9 +581,7 @@ def filter_geometry(
 
 
 # @timeit
-def fishnet(
-    geometry: shapely.Geometry, threshold: Union[int, float], lrbu=False
-) -> list:
+def fishnet(geometry: shapely.Geometry, threshold: Union[int, float], lrbu=False) -> list:
     """
     create fishnet grid based on the geometry and threshold
     :param geometry: input geometry
@@ -702,9 +628,7 @@ def fishnet(
 
 
 # @timeit
-def katana(
-    geometry: shapely.Geometry, threshold: Union[int, float], count: int = 0
-) -> list:
+def katana(geometry: shapely.Geometry, threshold: Union[int, float], count: int = 0) -> list:
     """Split a Polygon into two parts across its shortest dimension if area is greater than threshold."""
     bounds = geometry.bounds
     width = bounds[2] - bounds[0]
@@ -744,9 +668,7 @@ def katana(
     return final_result
 
 
-def gen_table_extent(
-    engine: Engine, table: Union[str, Type[Ttable]], filter_it: bool = True
-) -> gpd.GeoDataFrame:
+def gen_table_extent(engine: Engine, table: Union[str, Type[Ttable]], filter_it: bool = True) -> gpd.GeoDataFrame:
     """
     Generate catchment extent from catchment table or DEM table.
     """
@@ -756,13 +678,9 @@ def gen_table_extent(
         df = pd.read_sql(f"SELECT * FROM {table} ;", engine)
         df["geometry"] = df["extent_path"].apply(lambda x: gpd.read_file(x).geometry[0])
         if table == "grid_dem":
-            gdf = gpd.GeoDataFrame(
-                df[["grid_id", "geometry"]], crs="epsg:2193", geometry="geometry"
-            )
+            gdf = gpd.GeoDataFrame(df[["grid_id", "geometry"]], crs="epsg:2193", geometry="geometry")
         else:
-            gdf = gpd.GeoDataFrame(
-                df[["catch_id", "geometry"]], crs="epsg:2193", geometry="geometry"
-            )
+            gdf = gpd.GeoDataFrame(df[["catch_id", "geometry"]], crs="epsg:2193", geometry="geometry")
     else:
         gdf = tables.read_postgis_table(engine, table)
     if filter_it:
@@ -799,9 +717,7 @@ def gen_key_extent(
     return gdf
 
 
-def check_roi_dem_exist(
-    engine: Engine, geometry: Union[gpd.GeoDataFrame, shapely.Geometry]
-) -> tuple:
+def check_roi_dem_exist(engine: Engine, geometry: Union[gpd.GeoDataFrame, shapely.Geometry]) -> tuple:
     """
     check if the ROI DEM is in the database.
     """
@@ -820,9 +736,7 @@ def check_roi_dem_exist(
         gdf.sort_values("created_at", ascending=False, inplace=True)
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
             assert len(geometry) == 1, "Only one geometry is allowed."
-        logger.info(
-            f"Found DEM by geometry in table USERDEM, catch_id = {gdf['catch_id'].values[0]}."
-        )
+        logger.info(f"Found DEM by geometry in table USERDEM, catch_id = {gdf['catch_id'].values[0]}.")
         return gdf, tables.USERDEM.__tablename__
 
     # check pre-generated catchment DEM table then
@@ -835,10 +749,7 @@ def check_roi_dem_exist(
         buffer=10,
     )
     if not gdf.empty:
-        logger.info(
-            f"Found one or multiple DEMs by geometry in table DEM, "
-            f"catch_id = {gdf['catch_id'].to_list()}."
-        )
+        logger.info(f"Found one or multiple DEMs by geometry in table DEM, " f"catch_id = {gdf['catch_id'].to_list()}.")
         return gdf, tables.DEMATTR.__tablename__
 
     return gpd.GeoDataFrame(), None
@@ -862,13 +773,9 @@ def get_dem_by_id(engine: Engine, index: Union[int, str, list]) -> pd.DataFrame:
         hydro_dem_path = df["hydro_dem_path"].to_list()
         raw_dem_path = df["raw_dem_path"].to_list()
         extent_path = df["extent_path"].to_list()
-        for _hydro_dem_path, _raw_dem_path, _extent_path in zip(
-            hydro_dem_path, raw_dem_path, extent_path
-        ):
+        for _hydro_dem_path, _raw_dem_path, _extent_path in zip(hydro_dem_path, raw_dem_path, extent_path):
             if not Path(_hydro_dem_path).exists():
-                logger.warning(
-                    f"Expected Hydro DEM File {_hydro_dem_path} does not exist."
-                )
+                logger.warning(f"Expected Hydro DEM File {_hydro_dem_path} does not exist.")
             if not Path(_raw_dem_path).exists():
                 logger.warning(f"Expected Raw DEM File {_raw_dem_path} does not exist.")
             if not Path(_extent_path).exists():
@@ -898,9 +805,7 @@ def get_dem_by_geometry(
     if isinstance(geometry, (gpd.GeoSeries, pd.Series)):
         geometry = geometry.to_frame().T
     if isinstance(geometry, (gpd.GeoDataFrame, pd.DataFrame)):
-        assert (
-            len(geometry) == 1
-        ), f"Only one geometry is allowed, {geometry.to_string()}."
+        assert len(geometry) == 1, f"Only one geometry is allowed, {geometry.to_string()}."
         geometry = geometry["geometry"].values[0]
     gdf, table_name = check_roi_dem_exist(engine, geometry)
 
@@ -956,9 +861,7 @@ def get_dem_band_and_resolution_by_geometry(
         res_description = int(hydro_dem.description.split()[-1])
         # Check if the resolution from the metadata matches the actual resolution
         if res_no != res_description:
-            raise ValueError(
-                "Inconsistent resolution between metadata and actual resolution of the Hydro DEM."
-            )
+            raise ValueError("Inconsistent resolution between metadata and actual resolution of the Hydro DEM.")
         else:
             return hydro_dem, res_no
 
@@ -1017,14 +920,10 @@ def gen_clipped_data(
     clip_netcdf(raw_dem_file_list, raw_save_path, geometry)
     # extent
     clipped_extent = gdf.unary_union.intersection(geometry)
-    gdf_to_geojson = gpd.GeoDataFrame(
-        {"geometry": [clipped_extent]}, index=[0], crs="epsg:2193", geometry="geometry"
-    )
+    gdf_to_geojson = gpd.GeoDataFrame({"geometry": [clipped_extent]}, index=[0], crs="epsg:2193", geometry="geometry")
     gen_boundary_file("", gdf_to_geojson, "", save_file=extent_save_path)
     # original extent
-    gdf_to_geojson = gpd.GeoDataFrame(
-        {"geometry": [geometry]}, index=[0], crs="epsg:2193", geometry="geometry"
-    )
+    gdf_to_geojson = gpd.GeoDataFrame({"geometry": [geometry]}, index=[0], crs="epsg:2193", geometry="geometry")
     gen_boundary_file("", gdf_to_geojson, "", save_file=raw_extent_save_path)
     return clipped_extent
 
@@ -1042,38 +941,26 @@ def clip_dem(
     table = tables.USERDEM if table is None else table
 
     if index is None:
-        index = f"{datetime.now():%Y%m%d%H%M%S}"[
-            -10:
-        ]  # integer range up to 2,147,483,647
+        index = f"{datetime.now():%Y%m%d%H%M%S}"[-10:]  # integer range up to 2,147,483,647
         logger.info(f"Input index is None, use {index} as catchment index.")
     if isinstance(index, str):
         assert index.isdigit(), f"Catchment index {index} is not digit."
     # get DEM file path
-    clipped_dem_path = (
-        Path(get_env_variable("DATA_DIR"))
-        / Path(get_env_variable("DEM_DIR"))
-        / Path(f"{index}")
-    )
+    clipped_dem_path = Path(get_env_variable("DATA_DIR")) / Path(get_env_variable("DEM_DIR")) / Path(f"{index}")
     clipped_dem_path.mkdir(parents=True, exist_ok=True)
     catch_id = gdf["catch_id"].to_list()
     logger.info(f"Clipping catchment DEM {catch_id} to generate user DEM {index}.")
     df = get_dem_by_id(engine, catch_id)
-    assert len(df) == len(
-        gdf
-    ), f"Retrieve {len(df)} in DEM table, while retrieve {len(gdf)} in DEMATTR table."
+    assert len(df) == len(gdf), f"Retrieve {len(df)} in DEM table, while retrieve {len(gdf)} in DEMATTR table."
     clipped_dem_geometry = gen_clipped_data(index, df, gdf, clipped_dem_path, geometry)
     if table == tables.USERDEM:
         gdf_to_db = gpd.GeoDataFrame(
             {
                 "catch_id": int(index),
                 "resolution": gdf["resolution"].values[0],
-                "raw_dem_path": (
-                    clipped_dem_path / Path(f"{index}_raw_dem.nc")
-                ).as_posix(),
+                "raw_dem_path": (clipped_dem_path / Path(f"{index}_raw_dem.nc")).as_posix(),
                 "hydro_dem_path": (clipped_dem_path / Path(f"{index}.nc")).as_posix(),
-                "extent_path": (
-                    clipped_dem_path / Path(f"{index}_extent.geojson")
-                ).as_posix(),
+                "extent_path": (clipped_dem_path / Path(f"{index}_extent.geojson")).as_posix(),
                 "raw_geometry": geometry,
                 "geometry": clipped_dem_geometry,
                 "created_at": datetime.now(),
@@ -1082,12 +969,8 @@ def clip_dem(
             crs="epsg:2193",
         )
         tables.create_table(engine, table)
-        gdf_to_db.to_postgis(
-            table.__tablename__, engine, if_exists="append", index=False
-        )
-        logger.info(
-            f"Add new {index} in {tables.USERDEM.__tablename__} at {datetime.now()}."
-        )
+        gdf_to_db.to_postgis(table.__tablename__, engine, if_exists="append", index=False)
+        logger.info(f"Add new {index} in {tables.USERDEM.__tablename__} at {datetime.now()}.")
 
     elif table == tables.DEM:
         query = f"SELECT * FROM {tables.DEM.__tablename__} WHERE catch_id = '{index}' ;"
@@ -1100,9 +983,7 @@ def clip_dem(
                             updated_at = '{pd.Timestamp.now()}'
                         WHERE catch_id = '{index}' ;"""
             engine.execute(query)
-            logger.info(
-                f"Updated {index} in {tables.DEM.__tablename__} at {datetime.now()}."
-            )
+            logger.info(f"Updated {index} in {tables.DEM.__tablename__} at {datetime.now()}.")
         else:
             query = f"""INSERT INTO {tables.DEM.__tablename__} (
                         catch_id,
@@ -1132,9 +1013,7 @@ def clip_dem(
                             updated_at = '{datetime.now()}'
                         WHERE catch_id = '{index}' ;"""
             engine.execute(query)
-            logger.info(
-                f"Updated {index} in {tables.DEMATTR.__tablename__} at {datetime.now()}."
-            )
+            logger.info(f"Updated {index} in {tables.DEMATTR.__tablename__} at {datetime.now()}.")
         else:
             query = f"""INSERT INTO {tables.DEMATTR.__tablename__} (
                         catch_id,
@@ -1152,9 +1031,7 @@ def clip_dem(
                         '{pd.Timestamp.now()}'
                         ) ;"""
             engine.execute(query)
-        logger.info(
-            f"Add new {index} in {tables.DEMATTR.__tablename__} at {datetime.now()}."
-        )
+        logger.info(f"Add new {index} in {tables.DEMATTR.__tablename__} at {datetime.now()}.")
 
     # to return the geometry for calling function
     gdf_result = gpd.GeoDataFrame(
@@ -1162,9 +1039,7 @@ def clip_dem(
             "resolution": gdf["resolution"].values[0],
             "raw_dem_path": (clipped_dem_path / Path(f"{index}_raw_dem.nc")).as_posix(),
             "hydro_dem_path": (clipped_dem_path / Path(f"{index}.nc")).as_posix(),
-            "extent_path": (
-                clipped_dem_path / Path(f"{index}_extent.geojson")
-            ).as_posix(),
+            "extent_path": (clipped_dem_path / Path(f"{index}_extent.geojson")).as_posix(),
         },
         index=[0],
         crs="epsg:2193",
@@ -1188,9 +1063,7 @@ def save_gpkg(gdf: gpd.GeoDataFrame, file: Union[Type[Ttable], str]):
     logger.info(f"Save source catchments to {gpkg_path / Path(file_name)}.")
 
 
-def make_valid(
-    data: Union[gpd.GeoDataFrame, shapely.Geometry]
-) -> Union[gpd.GeoDataFrame, shapely.Geometry]:
+def make_valid(data: Union[gpd.GeoDataFrame, shapely.Geometry]) -> Union[gpd.GeoDataFrame, shapely.Geometry]:
     """
     Returns a valid representation of the object.
     """

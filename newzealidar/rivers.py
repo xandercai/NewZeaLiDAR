@@ -1,6 +1,7 @@
 import os
 import gc
 import math
+from typing import Type, Union
 import numpy as np
 import pandas as pd
 import dask.dataframe as dd
@@ -32,8 +33,9 @@ ox.settings.log_console = False
 
 logger = logging.getLogger(__name__)
 
-MAX_ENPOINT_SEA_DIST = 1_100
-MAX_DIST_SEA = 10_000
+MAX_ENDPOINT_SEA_DIST = 1_100
+MAX_ENDPOINT_NZREACH_DIST = 500
+MAX_SEA_DIST = 10_000
 CATCHMENT_RESOLUTION = 30
 RIVER_NETWORK_FILE = "river_network.geojson"
 
@@ -150,8 +152,8 @@ def prep_rec(file_path, save=False):
     logger.debug(f"Original REC1 shape: {gdf_rec.shape}")
     gdf_rec.to_crs(2193, inplace=True)
     # reduce the size of the dataframe
-    gdf_rec = gdf_rec[["NZREACH", "DISTSEA", "LENGTH", "CATCHAREA", "geometry"]]
-    gdf_rec = gdf_rec[gdf_rec["DISTSEA"] < MAX_DIST_SEA]
+    gdf_rec = gdf_rec[["NZREACH", "DISTSEA", "LENGTH", "CATCHAREA", "to_node", "from_node", "geometry"]]
+    gdf_rec = gdf_rec[gdf_rec["DISTSEA"] < MAX_SEA_DIST]
     logger.debug(f"Converted REC1 shape: {gdf_rec.shape}")
 
     if save:
@@ -181,50 +183,68 @@ def get_osmid(catch_id, gdf_sdc, gdf_coast, by="dist"):
     try:
         gdf_waterway = ox.features.features_from_polygon(gdf_catch_4326.unary_union, tags={"waterway": True})
     except Exception as e:
-        logger.debug(f"catch_id {catch_id}\n{e}")
-        return None, None, None, None, None
-    if gdf_waterway.empty:
-        logger.debug(f"{catch_id} No waterway in the catchment.")
-        return None, None, None, gdf_catch, gdf_waterway
+        logger.debug(f"{catch_id} No waterway in the catchment.\n{e}")
+        return None, None, None, gdf_catch, None
     gdf_waterway.to_crs(2193, inplace=True)
-    _len0 = len(gdf_waterway)
     gdf_waterway = gdf_waterway[pd.notnull(gdf_waterway["waterway"])].copy()
-    _len1 = len(gdf_waterway)
-    logger.debug(f"Found {_len0 - _len1} null waterway") if _len0 > _len1 else None
     gdf_waterway = gdf_waterway.reset_index()
+    # only keep the way type
     gdf_waterway = gdf_waterway[gdf_waterway.element_type == "way"].copy()
+    # check if there is any river in the catchment
     gdf_river = gdf_waterway[gdf_waterway.waterway == "river"].copy()
     if gdf_river.empty:
         logger.debug(f"{catch_id} No rivers in the catchment.")
         return None, None, None, gdf_catch, gdf_waterway
+    # clean up the man-made waterways ["canal", "ditch", "drain", "pressurised", "fairway"]
+    # https://wiki.openstreetmap.org/wiki/Map_features#Waterway
+    gdf_waterway_natural = gdf_waterway[
+        ~gdf_waterway.waterway.str.contains("canal|ditch|drain|pressurised|fairway")
+    ].copy()
+    if gdf_waterway_natural.empty:
+        logger.debug(f"{catch_id} No natural waterways in the catchment.")
+        return None, None, None, gdf_catch, gdf_waterway
     # clip the river to keep it inside the coastline to calculate length and distance to the coast
     # buffer it to make the catchment edge smoother to avoid the unappropriated endpoint
-    gdf_waterway_clipped = gdf_waterway.clip(gdf_catch.buffer(CATCHMENT_RESOLUTION / 2).unary_union)
-    gdf_waterway["len"] = gdf_waterway_clipped.geometry.length
-    gdf_waterway["dist"] = gdf_waterway_clipped.geometry.apply(lambda x: x.distance(gdf_coast.geometry[0].boundary))
+    gdf_waterway_clipped = gdf_waterway_natural.clip(gdf_catch.buffer(CATCHMENT_RESOLUTION / 2).unary_union)
+    gdf_waterway_clipped["len"] = gdf_waterway_clipped.geometry.length
+    gdf_waterway_clipped["dist_sea"] = gdf_waterway_clipped.geometry.apply(
+        lambda x: x.distance(gdf_coast.geometry.values[0].boundary)
+    )
     if by == "len":
-        gdf_sorted = gdf_waterway.sort_values(by="len", ascending=False).reset_index(drop=True)
+        gdf_sorted = gdf_waterway_clipped.sort_values(by="len", ascending=False).reset_index(drop=True)
     elif by == "dist":
-        # gdf_sorted = gdf_waterway.sort_values(by="dist", ascending=True).reset_index(drop=True)
-        # distance get higher priority than length
-        gdf_sorted = gdf_waterway.sort_values(by=["dist", "len"], ascending=[True, False]).reset_index(drop=True)
-        # full geometry of the river section
-        # river_geom = gdf_sorted[gdf_sorted.index == 0].geometry.values[0]
-        # the part geometry of the river section inside the catchment
-        river_osm_id = gdf_sorted[gdf_sorted.index == 0].osmid.values[0]
-        river_geom_clipped = gdf_waterway_clipped[gdf_waterway_clipped.osmid == river_osm_id].geometry.values[0]
+        try:
+            gdf_water = ox.features.features_from_polygon(gdf_catch_4326.unary_union, tags={"water": "river"})
+        except Exception as e:
+            gdf_water = None
+            logger.debug(f"{catch_id} No water:river in the catchment.\n{e}")
+        if gdf_water is not None and not gdf_water.empty:
+            gdf_water.to_crs(2193, inplace=True)
+            gdf_water = gdf_water[pd.notnull(gdf_water["water"])].copy()
+            gdf_water = gdf_water.reset_index()
+            gdf_water["area"] = gdf_water.geometry.area
+            gdf_water = gdf_water.sort_values(by="area", ascending=False).reset_index(drop=True)
+            gdf_waterway_clipped["dist_water"] = gdf_waterway_clipped.geometry.apply(
+                lambda x: x.distance(gdf_water.geometry.values[0])
+            )
+            gdf_sorted = gdf_waterway_clipped.sort_values(
+                by=["dist_water", "dist_sea", "len"], ascending=[True, True, False]
+            ).reset_index(drop=True)
+        else:
+            gdf_sorted = gdf_waterway_clipped.sort_values(by=["dist_sea", "len"], ascending=[True, False]).reset_index(
+                drop=True
+            )
+        river_geom = gdf_sorted[gdf_sorted.index == 0].geometry.values[0]
         coast_geom = gdf_coast.geometry.values[0].boundary
         catch_geom = gdf_catch.geometry.values[0]
         dist_catch_coast = catch_geom.distance(coast_geom)
-        # print(dist_catch_coast)
-        endpoint = nearest_points(river_geom_clipped, coast_geom)[0]
+        endpoint = nearest_points(river_geom, coast_geom)[0]
         dist_endpoint_coast = endpoint.distance(coast_geom)
-        # print(dist_endpoint_coast)
-        if abs(dist_endpoint_coast - dist_catch_coast) > MAX_ENPOINT_SEA_DIST:
+        if abs(dist_endpoint_coast - dist_catch_coast) > MAX_ENDPOINT_SEA_DIST:
             logger.debug(
                 f"{catch_id} The equivalent distance between endpoint ({endpoint.x:.0f} {endpoint.y:.0f}) to coast is "
                 f"{abs(dist_endpoint_coast - dist_catch_coast):.0f} meter which is "
-                f"larger than {MAX_ENPOINT_SEA_DIST} limitation."
+                f"larger than {MAX_ENDPOINT_SEA_DIST} limitation."
             )
             return None, None, None, gdf_catch, gdf_waterway
     else:
@@ -235,15 +255,16 @@ def get_osmid(catch_id, gdf_sdc, gdf_coast, by="dist"):
         assert isinstance(name, str) or math.isnan(name), name
         if isinstance(name, str):
             gdf_sorted = gdf_sorted[gdf_sorted.name == name].copy()
+            gdf_sorted.reset_index(drop=True, inplace=True)
     osm_id = gdf_sorted.osmid.to_list()
     logger.debug(f"{catch_id} Retrieve river {name} OSM ID: {osm_id}")
     # gdf_sorted = gdf_sorted[["osmid", "name", "waterway", "nodes", "len", "dist", "geometry"]]
-    gdf_sorted = gdf_sorted[["osmid", "waterway", "nodes", "geometry"]]
+    gdf_sorted = gdf_sorted[["osmid", "waterway", "len", "dist_sea", "geometry"]]
 
     return osm_id[0], endpoint, gdf_sorted, gdf_catch, gdf_waterway
 
 
-def get_recid(catch_id, gdf_sdc, gdf_rec, geom_point=None, by="dist"):
+def get_recid(catch_id, gdf_sdc, gdf_rec, endpoint=None, by="dist"):
     assert gdf_sdc.crs.to_epsg() == 2193, f"Input data CRS is not 2193 but {gdf_sdc.crs.to_epsg()}"
     assert gdf_rec.crs.to_epsg() == 2193, f"Input data CRS is not 2193 but {gdf_rec.crs.to_epsg()}"
 
@@ -263,17 +284,28 @@ def get_recid(catch_id, gdf_sdc, gdf_rec, geom_point=None, by="dist"):
     if by == "area":
         gdf_sorted = gdf_rec_catch.sort_values(by="CATCHAREA", ascending=False).reset_index(drop=True)
     elif by == "dist":
-        if geom_point:
-            # print(geom_point)
-            gdf_rec_catch["dist"] = gdf_rec_catch.geometry.apply(lambda x: x.distance(geom_point))
-            gdf_sorted = gdf_rec_catch.sort_values(by="dist", ascending=True).reset_index(drop=True)
-            # 4 closest NZREACH to osm river endpoint
-            gdf_sorted = gdf_sorted[gdf_sorted.index < 5].copy()
-            gdf_sorted = gdf_sorted.sort_values(by="DISTSEA", ascending=True).reset_index(drop=True)
-            # 2 closest NZREACH to the coast
-            gdf_sorted = gdf_sorted[gdf_sorted.index < 3].copy()
-            # 1 closest largest NZREACH
-            gdf_sorted = gdf_sorted.sort_values(by="CATCHAREA", ascending=False).reset_index(drop=True)
+        if endpoint:
+            # print(endpoint)
+            gdf_rec_catch["dist"] = gdf_rec_catch.geometry.apply(lambda x: x.distance(endpoint))
+            # constain distance between endpoint and NZREACH
+            gdf_sorted = gdf_rec_catch[gdf_rec_catch.dist < MAX_ENDPOINT_NZREACH_DIST].copy()
+            if not gdf_sorted.empty:
+                # by area in the constrained distance
+                gdf_sorted = gdf_sorted.sort_values(by="CATCHAREA", ascending=False).reset_index(drop=True)
+            else:
+                logger.debug(
+                    f"{catch_id} Distance between NZREACH and OSM river endpoint "
+                    f"is larger than {MAX_ENDPOINT_NZREACH_DIST}."
+                )
+                # by distance to the endpoint only if the distance is larger than the limitation
+                gdf_sorted = gdf_rec_catch.sort_values(by="dist", ascending=True).reset_index(drop=True)
+            # check distance upper limit, if it is too far, they are not the same river
+            if gdf_sorted.dist.values[0] > MAX_ENDPOINT_NZREACH_DIST * 4:
+                logger.debug(
+                    f"{catch_id} The closest REC1 to the OSM river endpoint "
+                    f"is larger than {MAX_ENDPOINT_NZREACH_DIST * 4} meter."
+                )
+                return None, None, gdf_catch, gdf_rec_catch
         else:
             logger.debug(f"{catch_id} Input geom_pont is invalid")
             return None, None, gdf_catch, gdf_rec_catch
@@ -291,45 +323,10 @@ def gen_river_network(gdf_roi, gdf_rec, gdf_flow, path):
     if gdf_roi.crs.to_epsg() != 2193:
         gdf_roi.to_crs(2193, inplace=True)
 
-    geom = box(*gdf_roi.total_bounds)
+    geom = box(*gdf_roi.buffer(10, join_style="mitre").total_bounds)
     gdf_rec = gdf_rec.clip(geom)
     gdf_rec = gdf_rec[gdf_rec["NZREACH"].isin(gdf_flow["nzreach"])]
-    gdf_rec = gdf_rec.drop(
-        columns=[
-            "LENGTH",
-            "CLIMATE",
-            "GEOLOGY",
-            "DISTSEA",
-            "SHAPE_LENG",
-            "ORDER1",
-            "PS_FLOW",
-            "LC_NATIVE",
-            "LC_EXOTIC",
-            "LC_TUSSOCK",
-            "LC_SCRUB",
-            "LC_PASTURE",
-            "LC_WATER",
-            "LC_URBAN",
-            "PAST_BEEF",
-            "PAST_DAIRY",
-            "PAST_DEER",
-            "PAST_DRY",
-            "PAST_GRAZE",
-            "PAST_SHEEP",
-            "PAST_MIXED",
-            "APATITE",
-            "LC_DRAIN1",
-            "LC_DRAIN2",
-            "LC_DRAIN3",
-            "LC_DRAIN4",
-            "LC_DRAIN5",
-            "LC_DRAIN",
-            "RAIN",
-            "SLOPE",
-            "flow_lps",
-            "Flow_T",
-        ]
-    )
+    gdf_rec = gdf_rec[["NZREACH", "CATCHAREA", "to_node", "from_node", "geometry"]]
     gdf_rec = gdf_rec.astype({"NZREACH": "int64"})
     gdf_rec = gdf_rec.sort_values(by=["NZREACH"]).reset_index(drop=True)
     gdf_rec.rename(columns=str.lower, inplace=True)
@@ -337,13 +334,16 @@ def gen_river_network(gdf_roi, gdf_rec, gdf_flow, path):
 
     gdf_rec_with_flow = gpd.GeoDataFrame(pd.merge(gdf_rec, gdf_flow, on="nzreach", how="left"))
 
-    gdf_rec_with_flow.to_file((Path(path) / "river" / RIVER_NETWORK_FILE).as_posix())
+    save_path = Path(path) / "river" / RIVER_NETWORK_FILE
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    gdf_rec_with_flow.to_file(save_path.as_posix())
     logger.info(f"Save river network to {path}")
 
 
 def loop_proc(
     catch_id: int,
-    table: tables.Ttable,
+    table: Type[tables.Ttable],
     gdf_sdc: gpd.GeoDataFrame,
     gdf_rec: gpd.GeoDataFrame,
     gdf_coast: gpd.GeoDataFrame,
@@ -407,10 +407,19 @@ def loop_proc(
         logger.debug(f"Skip {catch_id} due to existing record in {table.__tablename__} and update is {update}.")
 
 
-def run(engine: Engine, rec_path, coast_path, catch_table=None, update=False):
+def run(
+    catch_table: Type[tables.Ttable] = None,
+    update: bool = False,
+    parallel: bool = True,
+):
     """
     Generate river network_id and osm_id table
     """
+    data_dir = utils.get_env_variable("DATA_DIR")
+    rec_path = Path(data_dir) / utils.get_env_variable("REC_FILE")
+    coast_path = Path(data_dir) / utils.get_env_variable("COAST_FILE")
+
+    engine = utils.get_database()
     table = tables.SDCP if catch_table is None else catch_table
 
     gdf_sdc = tables.read_postgis_table(engine, table)
@@ -450,79 +459,26 @@ def run(engine: Engine, rec_path, coast_path, catch_table=None, update=False):
         f"catch_id {sorted(catch_id)[0]} to {sorted(catch_id)[-1]} *********"
     )
 
-    with Pool(processes=multiprocessing.cpu_count()) as pool:
-        pool.starmap(
-            loop_proc,
-            zip(catch_id, repeat(tables.RIVER), repeat(gdf_sdc), repeat(gdf_rec), repeat(gdf_coast), repeat(update)),
-        )
-        pool.close()
-        pool.join()
+    if parallel:
+        with Pool(processes=multiprocessing.cpu_count()) as pool:
+            pool.starmap(
+                loop_proc,
+                zip(
+                    catch_id, repeat(tables.RIVER), repeat(gdf_sdc), repeat(gdf_rec), repeat(gdf_coast), repeat(update)
+                ),
+            )
+            pool.close()
+            pool.join()
+    else:
+        for i in catch_id:
+            loop_proc(i, tables.RIVER, gdf_sdc, gdf_rec, gdf_coast, update)
+
     logger.info(f"Finished process {tables.RIVER.__tablename__} at {pd.Timestamp.now()}.")
-
-    # for i in catch_id:
-    #     logger.info(f"*** Processing catchment {i} ***")
-    #     # make sure the table exist
-    #     tables.create_table(engine, tables.RIVER)
-
-    #     query = f"SELECT catch_id FROM {tables.RIVER.__tablename__} WHERE catch_id = '{i}' ;"
-    #     df_from_db = pd.read_sql(query, engine)
-
-    #     if df_from_db.empty or update:
-    #         osm_id, endpoint, gdf_river, _, gdf_waterway = get_osmid(i, gdf_sdc, gdf_coast, by="dist")
-    #         if osm_id:
-    #             nzreach, gdf_net, _, gdf_rec_catch = get_recid(i, gdf_sdc, gdf_rec, endpoint, by="dist")
-    #         else:
-    #             logger.debug(f"No river found in catchment {i}")
-    #             continue
-    #     else:
-    #         logger.info(f"Skip {i} due to existing record in {tables.RIVER.__tablename__} and update is {update}.")
-    #         continue
-
-    #     if not df_from_db.empty and update:
-    #         query = f"""UPDATE {tables.RIVER.__tablename__}
-    #                     SET rec_id = {nzreach},
-    #                         osm_id = {osm_id},
-    #                         rec_geometry = '{gdf_net.geometry.values[0]}',
-    #                         osm_geometry = '{gdf_river.geometry.values[0]}',
-    #                         updated_at = '{pd.Timestamp.now()}'
-    #                     WHERE catch_id = '{i}' ;"""
-    #         engine.execute(query)
-    #         logger.info(f"Updated {i} in {tables.RIVER.__tablename__} at {pd.Timestamp.now()}.")
-    #     elif df_from_db.empty:
-    #         query = f"""INSERT INTO {tables.RIVER.__tablename__} (
-    #                     catch_id,
-    #                     rec_id,
-    #                     osm_id,
-    #                     rec_geometry,
-    #                     osm_geometry,
-    #                     created_at,
-    #                     updated_at
-    #                     ) VALUES (
-    #                     {i},
-    #                     {nzreach},
-    #                     {osm_id},
-    #                     '{gdf_net.geometry.values[0]}',
-    #                     '{gdf_river.geometry.values[0]}',
-    #                     '{pd.Timestamp.now()}',
-    #                     '{pd.Timestamp.now()}'
-    #                     ) ;"""
-    #         engine.execute(query)
-    #         logger.info(f"Add new {i} in {tables.RIVER.__tablename__} at {pd.Timestamp.now()}.")
-    #     else:
-    #         logger.info(f"Skip {i} due to existing record in {tables.RIVER.__tablename__} and update is {update}.")
-
-    # logger.info(f"Finished process {tables.RIVER.__tablename__} at {pd.Timestamp.now()}.")
 
 
 if __name__ == "__main__":
     from newzealidar import logs
 
-    ox.settings.log_console = False
-
     logs.setup_logging()
 
-    engine = utils.get_database()
-
-    rec_path = r"../datastorage/REC1/rec1.shp"
-    coast_path = r"../datastorage/coastlines_4326/lines.shp"
-    run(engine, rec_path, coast_path, catch_table=tables.SDC, update=True)
+    run(catch_table=tables.SDC, update=False)
