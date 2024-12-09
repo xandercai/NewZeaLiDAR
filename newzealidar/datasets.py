@@ -31,7 +31,7 @@ supported_drivers["LIBKML"] = "rw"
 
 
 def get_extent_geometry(item: scrapy.Item) -> gpd.GeoSeries.geometry:
-    """Get extent geometry from kml file."""
+    """Get extent geometry from geojson file."""
     file = pathlib.Path(item["extent_path"])
     file = file.parent / pathlib.Path("tmp_datasets__" + str(file.name))
     # new added: filter out the datasets with datum other than NZVD2016
@@ -111,24 +111,25 @@ class ExtraFilesPipeline(FilesPipeline):
 
     def file_path(self, request, response=None, info=None, *, item=None):
         """Rename downloaded files."""
-        end_str = request.url.split("=")[-1]
-        if end_str == "xml":
-            directory = pathlib.Path(item["meta_path"]).parent
-            name = "tmp_datasets__" + str(pathlib.Path(item["meta_path"]).name)
-            file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
-        elif end_str == "true":  # kml url is ended with "download=true"
-            directory = pathlib.Path(item["extent_path"]).parent
-            name = "tmp_datasets__" + str(pathlib.Path(item["extent_path"]).name)
-            file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
-        else:
-            logger.warning(f"input url {request.url} is not correct.")
-            file_path = None
-        return file_path
+        if response:
+            end_str = request.url[-3:]
+            if end_str == "xml":
+                directory = pathlib.Path(item["meta_path"]).parent
+                name = "tmp_datasets__" + str(pathlib.Path(item["meta_path"]).name)
+                file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
+            elif end_str == "son":  # geojson
+                directory = pathlib.Path(item["extent_path"]).parent
+                name = "tmp_datasets__" + str(pathlib.Path(item["extent_path"]).name)
+                file_path = str(pathlib.PurePosixPath(directory / pathlib.Path(name)))
+            else:
+                logger.warning(f"input url {request.url} is not correct.")
+                file_path = None
+            return file_path
 
     def item_completed(self, results, item, info):
         """Save crawled data to database."""
         if item["private"]:
-            logger.warning(f'Private dataset: {item["name"]} is not saved to database.')
+            logger.warning(f'Private or Embargo dataset: {item["name"]} is not saved to database.')
             return item
         engine = utils.get_database(null_pool=True)
         create_table(engine, DATASET)
@@ -145,7 +146,7 @@ class ExtraFilesPipeline(FilesPipeline):
             "point_cloud_density": item["point_cloud_density"],
             "original_datum": item["datum"],
             "meta_path": item["meta_path"],
-            "meta_source": item["file_urls"][0],
+            "meta_source": item["file_urls"][1],
             "extent_path": item["extent_path"],
             # 'extent_source': item['file_urls'][1],
             "tile_path": item["tile_path"],
@@ -207,12 +208,12 @@ class DatasetSpider(CrawlSpider):
     #     'LOG_LEVEL': 'INFO',
     # }  # not working
 
-    allowed_domains = ["portal.opentopography.org"]
+    allowed_domains = ["portal.opentopography.org", "raw.githubusercontent.com"]
 
     def __init__(self, data_dir, *a, **kw):
         super(DatasetSpider, self).__init__(*a, **kw)
         self.data_dir = data_dir
-        self.start_urls = ("https://portal.opentopography.org/",)
+        self.start_urls = ("https://portal.opentopography.org/", "https://raw.githubusercontent.com/")
 
     def start_requests(self):
         urls = [
@@ -230,16 +231,19 @@ class DatasetSpider(CrawlSpider):
 
     def parse_metadata(self, response):
         item = DatasetItem()
-        item["name"] = (
+        _item_name = (
             response.xpath('//strong[text()="Short Name"]/following-sibling::text()[1]')
             .extract()[0]
             .split(":")[-1]
             .strip()
         )
+        item["name"] = _item_name
+
         # item['ot_id'] = response.xpath(
         #     '//strong[text()="OT Collection ID"]/following-sibling::text()[1]'
         # ).extract()[0].split(':')[-1].strip()
-        item["describe"] = (
+
+        _item_describe = (
             response.xpath(
                 '//strong[text()="OT Collection Name"]/following-sibling::text()[1]'
             )
@@ -247,6 +251,9 @@ class DatasetSpider(CrawlSpider):
             .split(":")[-1]
             .strip()
         )
+        item["describe"] = _item_describe
+
+        date = 0
         survey_date = (
             response.xpath('//strong[text()="Survey Date"]/following-sibling::text()')
             .extract()[0]
@@ -255,19 +262,22 @@ class DatasetSpider(CrawlSpider):
         survey_date = survey_date.split("-")
         if len(survey_date) == 1:  # no start date
             date = search_string(r"(\d{2}/\d{2}/\d{4})", survey_date[0])
-            item["survey_start_date"] = item["survey_end_date"] = datetime.strptime(
+            _date = datetime.strptime(
                 date, "%m/%d/%Y"
             ).strftime("%Y-%m-%d")
+            item["survey_start_date"] = item["survey_end_date"] = _date
         elif len(survey_date) == 2:
             date = search_string(r"(\d{2}/\d{2}/\d{4})", survey_date[0])
-            item["survey_start_date"] = datetime.strptime(date, "%m/%d/%Y").strftime(
+            _date_s = datetime.strptime(date, "%m/%d/%Y").strftime(
                 "%Y-%m-%d"
             )
+            item["survey_start_date"] = _date_s
             date = search_string(r"(\d{2}/\d{2}/\d{4})", survey_date[1])
-            item["survey_end_date"] = datetime.strptime(date, "%m/%d/%Y").strftime(
+            _date_e = datetime.strptime(date, "%m/%d/%Y").strftime(
                 "%Y-%m-%d"
             )
-        date = (
+            item["survey_end_date"] = _date_e
+            date = (
             response.xpath(
                 '//strong[text()="Publication Date"]/following-sibling::text()'
             )
@@ -275,13 +285,16 @@ class DatasetSpider(CrawlSpider):
             .strip()
         )
         date = search_string(r"(\d{2}/\d{2}/\d{4})", date)
-        item["publication_date"] = datetime.strptime(date, "%m/%d/%Y").strftime(
+        _date_p = datetime.strptime(date, "%m/%d/%Y").strftime(
             "%Y-%m-%d"
         )
+        item["publication_date"] = _date_p
+
         # item['collector'] = response.xpath(
         #     '//text()[contains(.,"Collector")]/following-sibling::ul[1]//text()'
         # ).extract()
-        item["point_cloud_density"] = (
+
+        _item_point_cloud_density = (
             response.xpath(
                 '//strong[text()="Point Density"]/following-sibling::text()[1]'
             )
@@ -289,33 +302,58 @@ class DatasetSpider(CrawlSpider):
             .split()[1]
             .strip()
         )
+        item["point_cloud_density"] = _item_point_cloud_density
+
         datum = (
             response.xpath('//text()[contains(., "Vertical:")]').extract()[0].strip()
         )
-        item["datum"] = search_string(r"Vertical: (\w+\s*\d+)", datum)
+        _item_datum = search_string(r"Vertical: (\w+\s*\d+)", datum)
+        item["datum"] = _item_datum
+
         item["dataset_url"] = response.url
         file_urls = response.xpath(
-            '//a[text()="ISO 19115 (Data)" or starts-with(@href, "/getKml")]/@href'
+            # '//a[text()="ISO 19115 (Data)" or starts-with(@href, "/getKml")]/@href'
+            f"""//a[text()="ISO 19115 (Data)" or text()="{item['name']}.geojson"]/@href"""
         ).extract()
-        file_urls = [response.urljoin(u) for u in file_urls]
-        item["file_urls"] = file_urls
-        data_path = pathlib.Path(self.data_dir) / pathlib.Path(item["name"])
-        item["meta_path"] = str(
-            pathlib.PurePosixPath(data_path / pathlib.Path(item["name"] + "_Meta.xml"))
+        # file_urls = [response.urljoin(u) for u in file_urls]
+        _item_urls = []
+        for u in file_urls:
+            if u.endswith("geojson") and "Point_Cloud" in u:
+                _item_urls.append(response.urljoin(u))
+            elif u.endswith("xml"):
+                _item_urls.append(response.urljoin(u))
+            else:
+                logger.debug(f"File url {u} is not correct.")
+        item["file_urls"] = _item_urls
+        print("file_urls: ", item["file_urls"])
+
+        data_path = pathlib.Path(self.data_dir) / item["name"]
+        _item_meta_path = str(
+            data_path / (item["name"] + "_Meta.xml")
         )
-        item["extent_path"] = str(
-            pathlib.PurePosixPath(data_path)
-            / pathlib.Path(item["name"] + "_Extent.kml")
+        item["meta_path"] = _item_meta_path
+
+        _item_extent_path = str(
+            data_path
+            / (item["name"] + ".geojson")
+            # / pathlib.Path(item["name"] + "_Extent.kml")
         )
-        item["tile_path"] = str(
-            pathlib.PurePosixPath(data_path)
-            / pathlib.Path(item["name"] + "_TileIndex.zip")
+        item["extent_path"] = _item_extent_path
+
+        _item_tile_path = str(
+            data_path
+            / (item["name"] + "_TileIndex.zip")
         )
-        item["private"] = (
-            True
-            if response.xpath('//text()[contains(., "Private Dataset")]').extract()
-            else False
-        )
+        item["tile_path"] = _item_tile_path
+
+        if response.xpath('//text()[contains(., "Private Dataset")]').extract():
+            _item_private = True
+        elif response.xpath('//text()[contains(., "Temporary Embargo")]').extract():
+            _item_private = True
+        else:
+            _item_private = False
+        item["private"] = _item_private
+
         yield item
 
 
@@ -333,7 +371,8 @@ def crawl_dataset() -> None:
             "DOWNLOAD_DELAY": 1.5,  # to avoid request too frequently and get incomplete response.
             "ITEM_PIPELINES": {"newzealidar.datasets.ExtraFilesPipeline": 1},
             "FILES_STORE": "./",
-            "LOG_LEVEL": "INFO",
+            # "LOG_ENABLED": True,
+            # "LOG_LEVEL": "DEBUG",
         }
     )
     process.crawl(
@@ -365,7 +404,7 @@ def rename_file():
     data_dir = pathlib.Path(utils.get_env_variable("DATA_DIR")) / pathlib.Path(
         utils.get_env_variable("LIDAR_DIR")
     )
-    list_file = utils.get_files([".kml", "xml"], data_dir)
+    list_file = utils.get_files(["geojson", "xml"], data_dir)
     count = 0
     for file in list_file:
         file = pathlib.Path(file)
@@ -375,7 +414,7 @@ def rename_file():
                 new_file.unlink()
             file.rename(new_file)
             count += 1
-    logger.debug(f"Finish renaming {count} .xml and .kml file.")
+    logger.debug(f"Finish renaming {count} .xml and .geojson files.")
 
 
 def run():
